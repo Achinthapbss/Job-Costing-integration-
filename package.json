@@ -6,14 +6,22 @@
     "dev": "next dev",
     "build": "next build",
     "start": "next start",
-    "lint": "eslint"
+    "lint": "eslint",
+    "worker:master": "node scripts/master-worker.mjs",
+    "worker:transaction": "node scripts/transaction-worker.mjs",
+    "service:master:install": "npm --prefix services/master-service install",
+    "service:master:start": "npm --prefix services/master-service start",
+    "service:transaction:install": "npm --prefix services/transaction-service install",
+    "service:transaction:start": "npm --prefix services/transaction-service start"
   },
   "dependencies": {
+    "mssql": "^12.2.1",
     "next": "16.2.2",
     "react": "19.2.4",
     "react-dom": "19.2.4"
   },
   "devDependencies": {
+    "@types/mssql": "^9.1.11",
     "@types/node": "^20",
     "@types/react": "^19",
     "@types/react-dom": "^19",

@@ -56,87 +56,39 @@
   color: var(--text-secondary);
 }
 
-.intro a {
-  font-weight: 500;
-  color: var(--text-primary);
+.page {
+  min-height: 100vh;
+  padding: 28px 16px 40px;
+  background:
+    radial-gradient(circle at 8% 15%, #fceec9 0%, transparent 35%),
+    radial-gradient(circle at 92% 15%, #d9f6ee 0%, transparent 32%),
+    linear-gradient(180deg, #f5fafc 0%, #eef4f8 100%);
 }
 
-.ctas {
-  display: flex;
-  flex-direction: row;
-  width: 100%;
-  max-width: 440px;
+.shell {
+  max-width: 1100px;
+  margin: 0 auto;
+  display: grid;
   gap: 16px;
-  font-size: 14px;
 }
 
-.ctas a {
-  display: flex;
-  justify-content: center;
-  align-items: center;
-  height: 40px;
-  padding: 0 16px;
-  border-radius: 128px;
-  border: 1px solid transparent;
-  transition: 0.2s;
-  cursor: pointer;
-  width: fit-content;
-  font-weight: 500;
+.hero {
+  background: linear-gradient(135deg, #0f3d4d 0%, #176d63 60%, #4ca274 100%);
+  color: #f3fffc;
+  border-radius: 18px;
+  padding: 24px;
+  box-shadow: 0 18px 38px rgba(8, 42, 52, 0.25);
 }
 
-a.primary {
-  background: var(--text-primary);
-  color: var(--background);
-  gap: 8px;
+.hero h1 {
+  margin: 0;
+  font-size: clamp(1.4rem, 1rem + 1.8vw, 2.2rem);
+  letter-spacing: 0.02em;
 }
 
-a.secondary {
-  border-color: var(--button-secondary-border);
+.hero p {
+  margin: 0;
+  opacity: 0.95;
+  max-width: 70ch;
 }
 
-/* Enable hover only on non-touch devices */
-@media (hover: hover) and (pointer: fine) {
-  a.primary:hover {
-    background: var(--button-primary-hover);
-    border-color: transparent;
-  }
-
-  a.secondary:hover {
-    background: var(--button-secondary-hover);
-    border-color: transparent;
-  }
-}
-
-@media (max-width: 600px) {
-  .main {
-    padding: 48px 24px;
-  }
-
-  .intro {
-    gap: 16px;
-  }
-
-  .intro h1 {
-    font-size: 32px;
-    line-height: 40px;
-    letter-spacing: -1.92px;
-  }
-}
-
-@media (prefers-color-scheme: dark) {
-  .logo {
-    filter: invert();
-  }
-
-  .page {
-    --background: #000;
-    --foreground: #000;
-
-    --text-primary: #ededed;
-    --text-secondary: #999;
-
-    --button-primary-hover: #ccc;
-    --button-secondary-hover: #1a1a1a;
-    --button-secondary-border: #1a1a1a;
-  }
-}
