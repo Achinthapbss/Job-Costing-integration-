@@ -366,6 +366,7 @@ When enabled:
 - Every sync transaction is upserted to `SyncTransactions`.
 - Every sync event/error is inserted into `SyncTransactionEvents`.
 - SAP master records are persisted to `dbo.SyncMasterDataRaw` when `LOCAL_DB_WRITE_MASTER_DATA=true` and `dryRun=false`.
+- `accounts` also updates `dbo.tblRefAccounts`, mirroring the old import/upsert/inactivate flow.
 - `currency` also refreshes `dbo.tblRefCurrency`, mirroring the old delete-and-insert flow.
 - `customer` also updates `dbo.tblRefCustomer`, mirroring the old import/upsert/inactivate flow.
 - `currency-rates` also refreshes `dbo.tblRefCurrencyRate`, mirroring the old delete-and-insert flow.
@@ -373,6 +374,7 @@ When enabled:
 - `item-warehouses` also updates `dbo.tblRefItem_WH`, mirroring the old clear/upsert/inactivate flow.
 - `periods` also updates `dbo.tblRefPeriods`, mirroring the old import/upsert/inactivate flow.
 - `tax-codes` also updates `dbo.tblRefVATCodes`, mirroring the old import/upsert/inactivate flow.
+- When the old accounts stored procedures exist, the app prefers them: `dbo.tblRefAccounts_Clear_UpdateInactive`, `dbo.tblRefAccounts_Insert`, and `dbo.tblRefAccounts_UpdateInactive`.
 - When the old customer stored procedures exist, the app prefers them: `dbo.tblRefCustomer_Insert` and `dbo.tblRefCustomer_UpdateInactive`.
 - When the old item-warehouse stored procedures exist, the app prefers them: `dbo.tblRefItem_WH_Clear_UpdateInactive`, `dbo.tblRefItem_WH_Insert`, and `dbo.tblRefItem_WH_UpdateInactive`.
 - When the old currency stored procedures exist, the app prefers them: `dbo.tblRefCurrency_Delete`, `dbo.tblRefCurrency_Insert`, `dbo.tblRefCurrencyRate_Delete`, `dbo.tblRefCurrencyRate_Insert`, `dbo.tblRefCustomer_Currency_Delete`, and `dbo.tblRefCustomer_Currency_Insert`.
@@ -380,6 +382,13 @@ When enabled:
 - When the old VAT stored procedures exist, the app prefers them: `dbo.tblRefVATCodes_Clear_UpdateInactive`, `dbo.tblRefVATCodes_Insert`, and `dbo.tblRefVATCodes_UpdateInactive`.
 - `uom` also updates `dbo.tblRefUnits` with the old upsert/inactivate flow when that legacy table already exists.
 - `warehouse-master` also updates `dbo.tblWhseMst` with the old ImportStatus/Active flow when that legacy table already exists.
+
+Accounts legacy behavior:
+- Source is SAP Service Layer `GET /b1s/v1/ChartOfAccounts`.
+- Records are mapped from account fields like `Segment_0`, `ActId`, `AcctCode` or `Code`, `Groups` or `GroupMask`, `AcctName` or `Name`, `DfltTax`, and `Frozen` into `dbo.tblRefAccounts`.
+- The local DB flow mirrors the provided old code: the clear step resets `ImportStatus=0`, each row is upserted by `AccountLink_1`, and then inactive rows are marked through `Status=0`.
+- The legacy `Account` and `Master_Sub_Account` values both use the mapped account code, matching the old import behavior.
+- Local DB writes prefer the old accounts stored procedures when they exist and fall back to direct parameterized SQL when they do not.
 
 Customer legacy behavior:
 - Source is SAP Service Layer `GET /b1s/v1/BusinessPartners?$filter=CardType eq 'C'`.

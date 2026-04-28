@@ -1,16 +1,29 @@
 import { getMasterPostEnv, getTargetEnv, getValidationEnv } from "@/lib/env";
 import {
+  syncBankToLegacyTable,
+  syncBranchToLegacyTable,
   insertMasterDataRawBatch,
+  syncItemToLegacyTable,
   isLocalDbMasterDataWriteEnabled,
+  syncPriceListToLegacyTable,
+  syncProjectToLegacyTable,
+  syncAccountsToLegacyTable,
   syncCustomerToLegacyTable,
   syncCurrencyMasterToLegacyTable,
   syncCurrencyRatesToLegacyTable,
   syncCustomerCurrencyToLegacyTable,
+  syncDistributionRulesToLegacyTable,
   syncItemWarehousesToLegacyTable,
+  syncLoginUsersToLegacyTable,
   syncPeriodsToLegacyTable,
+  syncSalesRepToLegacyTable,
+  syncSerialNumbersToLegacyTable,
   syncTaxCodesToLegacyTable,
+  syncUomConversionToLegacyTable,
+  syncUomGroupToLegacyTable,
   syncUomToLegacyTable,
   syncWarehouseMasterToLegacyTable,
+  syncVendorToLegacyTable,
 } from "@/lib/local-db";
 import { getMasterDataConfig } from "@/lib/master-data-map";
 import { buildMasterSapPayload } from "@/lib/master-sap-payload-builders";
@@ -22,12 +35,25 @@ import {
   isCurrencyRatesKey,
   isCustomerCurrencyKey,
 } from "@/lib/currency-master";
+import { isAccountsKey } from "@/lib/account-master";
 import { isCustomerMasterKey } from "@/lib/customer-master";
+import { isDistributionRulesKey } from "@/lib/distribution-rule-master";
+import { isItemKey } from "@/lib/item-master";
 import { isItemWarehousesKey } from "@/lib/item-warehouse-master";
+import { isLoginUsersKey } from "@/lib/login-user-master";
+import { isPriceListKey } from "@/lib/price-list-master";
+import { isProjectKey } from "@/lib/project-master";
+import { isSerialNumbersKey } from "@/lib/serial-number-master";
 import { isPeriodsKey } from "@/lib/period-master";
+import { isSalesRepKey } from "@/lib/sales-rep-master";
 import { isTaxCodesKey } from "@/lib/tax-master";
+import { isUomConversionKey } from "@/lib/uom-conversion-master";
+import { isUomGroupKey } from "@/lib/uom-group-master";
 import { isUomMasterKey } from "@/lib/uom-master";
 import { isWarehouseMasterKey } from "@/lib/warehouse-master";
+import { isVendorKey } from "@/lib/vendor-master";
+import { isBankKey } from "@/lib/bank-master";
+import { isBranchKey } from "@/lib/branch-master";
 import { SyncMasterDataOptions, SyncMasterDataResult } from "@/types/master-data";
 
 export class SyncExecutionError extends Error {
@@ -289,6 +315,131 @@ export async function syncMasterData(
         }
       }
 
+      if (isAccountsKey(config.key)) {
+        if (recordsToProcess.length === 0) {
+          await logSyncEvent({
+            transactionId: transaction.transactionId,
+            level: "warn",
+            stage: "local-db-accounts-sync",
+            message: "Skipped legacy tblRefAccounts sync because there were no account records to apply",
+          });
+        } else {
+          const accountsSync = await syncAccountsToLegacyTable({
+            records: recordsToProcess,
+          });
+
+          await logSyncEvent({
+            transactionId: transaction.transactionId,
+            level: accountsSync.applied ? "info" : "warn",
+            stage: "local-db-accounts-sync",
+            message: accountsSync.applied
+              ? "Synchronized accounts to legacy tblRefAccounts"
+              : "Skipped legacy tblRefAccounts synchronization",
+            details: accountsSync,
+          });
+        }
+      }
+
+      if (isVendorKey(config.key)) {
+        if (recordsToProcess.length === 0) {
+          await logSyncEvent({
+            transactionId: transaction.transactionId,
+            level: "warn",
+            stage: "local-db-vendor-sync",
+            message: "Skipped legacy tblRefVendor sync because there were no vendor records to apply",
+          });
+        } else {
+          const vendorSync = await syncVendorToLegacyTable({
+            records: recordsToProcess,
+          });
+
+          await logSyncEvent({
+            transactionId: transaction.transactionId,
+            level: vendorSync.applied ? "info" : "warn",
+            stage: "local-db-vendor-sync",
+            message: vendorSync.applied
+              ? "Synchronized vendor records to legacy tblRefVendor"
+              : "Skipped legacy tblRefVendor synchronization",
+            details: vendorSync,
+          });
+        }
+      }
+
+      if (isSalesRepKey(config.key)) {
+        if (recordsToProcess.length === 0) {
+          await logSyncEvent({
+            transactionId: transaction.transactionId,
+            level: "warn",
+            stage: "local-db-sales-rep-sync",
+            message: "Skipped legacy tblRefSalesRep sync because there were no sales rep records to apply",
+          });
+        } else {
+          const salesRepSync = await syncSalesRepToLegacyTable({
+            records: recordsToProcess,
+          });
+
+          await logSyncEvent({
+            transactionId: transaction.transactionId,
+            level: salesRepSync.applied ? "info" : "warn",
+            stage: "local-db-sales-rep-sync",
+            message: salesRepSync.applied
+              ? "Synchronized sales rep records to legacy tblRefSalesRep"
+              : "Skipped legacy tblRefSalesRep synchronization",
+            details: salesRepSync,
+          });
+        }
+      }
+
+      if (isLoginUsersKey(config.key)) {
+        if (recordsToProcess.length === 0) {
+          await logSyncEvent({
+            transactionId: transaction.transactionId,
+            level: "warn",
+            stage: "local-db-login-users-sync",
+            message: "Skipped legacy [Login] sync because there were no login user records to apply",
+          });
+        } else {
+          const loginUsersSync = await syncLoginUsersToLegacyTable({
+            records: recordsToProcess,
+          });
+
+          await logSyncEvent({
+            transactionId: transaction.transactionId,
+            level: loginUsersSync.applied ? "info" : "warn",
+            stage: "local-db-login-users-sync",
+            message: loginUsersSync.applied
+              ? "Synchronized login users to legacy [Login]"
+              : "Skipped legacy [Login] synchronization",
+            details: loginUsersSync,
+          });
+        }
+      }
+
+      if (isDistributionRulesKey(config.key)) {
+        if (recordsToProcess.length === 0) {
+          await logSyncEvent({
+            transactionId: transaction.transactionId,
+            level: "warn",
+            stage: "local-db-distribution-rules-sync",
+            message: "Skipped legacy tblRefDistributionRule sync because there were no distribution rule records to apply",
+          });
+        } else {
+          const distributionRulesSync = await syncDistributionRulesToLegacyTable({
+            records: recordsToProcess,
+          });
+
+          await logSyncEvent({
+            transactionId: transaction.transactionId,
+            level: distributionRulesSync.applied ? "info" : "warn",
+            stage: "local-db-distribution-rules-sync",
+            message: distributionRulesSync.applied
+              ? "Synchronized distribution rules to legacy tblRefDistributionRule"
+              : "Skipped legacy tblRefDistributionRule synchronization",
+            details: distributionRulesSync,
+          });
+        }
+      }
+
       if (isCurrencyMasterKey(config.key)) {
         if (recordsToProcess.length === 0) {
           await logSyncEvent({
@@ -460,6 +611,206 @@ export async function syncMasterData(
               ? "Synchronized periods to legacy tblRefPeriods"
               : "Skipped legacy tblRefPeriods synchronization",
             details: periodsSync,
+          });
+        }
+      }
+
+      if (isProjectKey(config.key)) {
+        if (recordsToProcess.length === 0) {
+          await logSyncEvent({
+            transactionId: transaction.transactionId,
+            level: "warn",
+            stage: "local-db-project-sync",
+            message: "Skipped legacy tblRefProject sync because there were no project records to apply",
+          });
+        } else {
+          const projectSync = await syncProjectToLegacyTable({
+            records: recordsToProcess,
+          });
+
+          await logSyncEvent({
+            transactionId: transaction.transactionId,
+            level: projectSync.applied ? "info" : "warn",
+            stage: "local-db-project-sync",
+            message: projectSync.applied
+              ? "Synchronized projects to legacy tblRefProject"
+              : "Skipped legacy tblRefProject synchronization",
+            details: projectSync,
+          });
+        }
+      }
+
+      if (isPriceListKey(config.key)) {
+        if (recordsToProcess.length === 0) {
+          await logSyncEvent({
+            transactionId: transaction.transactionId,
+            level: "warn",
+            stage: "local-db-price-list-sync",
+            message: "Skipped legacy tblRefPriceListPrices sync because there were no price-list records to apply",
+          });
+        } else {
+          const priceListSync = await syncPriceListToLegacyTable({
+            records: recordsToProcess,
+          });
+
+          await logSyncEvent({
+            transactionId: transaction.transactionId,
+            level: priceListSync.applied ? "info" : "warn",
+            stage: "local-db-price-list-sync",
+            message: priceListSync.applied
+              ? "Synchronized price-list records to legacy tblRefPriceListPrices"
+              : "Skipped legacy tblRefPriceListPrices synchronization",
+            details: priceListSync,
+          });
+        }
+      }
+
+      if (isItemKey(config.key)) {
+        if (recordsToProcess.length === 0) {
+          await logSyncEvent({
+            transactionId: transaction.transactionId,
+            level: "warn",
+            stage: "local-db-item-sync",
+            message: "Skipped legacy tblRefItem sync because there were no item records to apply",
+          });
+        } else {
+          const itemSync = await syncItemToLegacyTable({
+            records: recordsToProcess,
+          });
+
+          await logSyncEvent({
+            transactionId: transaction.transactionId,
+            level: itemSync.applied ? "info" : "warn",
+            stage: "local-db-item-sync",
+            message: itemSync.applied
+              ? "Synchronized item records to legacy tblRefItem"
+              : "Skipped legacy tblRefItem synchronization",
+            details: itemSync,
+          });
+        }
+      }
+
+      if (isUomGroupKey(config.key)) {
+        if (recordsToProcess.length === 0) {
+          await logSyncEvent({
+            transactionId: transaction.transactionId,
+            level: "warn",
+            stage: "local-db-uom-group-sync",
+            message: "Skipped legacy tblRefUOMGroup sync because there were no UOM-group records to apply",
+          });
+        } else {
+          const uomGroupSync = await syncUomGroupToLegacyTable({
+            records: recordsToProcess,
+          });
+
+          await logSyncEvent({
+            transactionId: transaction.transactionId,
+            level: uomGroupSync.applied ? "info" : "warn",
+            stage: "local-db-uom-group-sync",
+            message: uomGroupSync.applied
+              ? "Synchronized UOM-group records to legacy tblRefUOMGroup"
+              : "Skipped legacy tblRefUOMGroup synchronization",
+            details: uomGroupSync,
+          });
+        }
+      }
+
+      if (isUomConversionKey(config.key)) {
+        if (recordsToProcess.length === 0) {
+          await logSyncEvent({
+            transactionId: transaction.transactionId,
+            level: "warn",
+            stage: "local-db-uom-conversion-sync",
+            message: "Skipped legacy tblRefUOMConverstion sync because there were no UOM-conversion records to apply",
+          });
+        } else {
+          const uomConversionSync = await syncUomConversionToLegacyTable({
+            records: recordsToProcess,
+          });
+
+          await logSyncEvent({
+            transactionId: transaction.transactionId,
+            level: uomConversionSync.applied ? "info" : "warn",
+            stage: "local-db-uom-conversion-sync",
+            message: uomConversionSync.applied
+              ? "Synchronized UOM-conversion records to legacy tblRefUOMConverstion and tblRefUOMFormula"
+              : "Skipped legacy UOM-conversion synchronization",
+            details: uomConversionSync,
+          });
+        }
+      }
+
+      if (isBankKey(config.key)) {
+        if (recordsToProcess.length === 0) {
+          await logSyncEvent({
+            transactionId: transaction.transactionId,
+            level: "warn",
+            stage: "local-db-bank-sync",
+            message: "Skipped legacy bank sync because there were no bank records to apply",
+          });
+        } else {
+          const bankSync = await syncBankToLegacyTable({
+            records: recordsToProcess,
+          });
+
+          await logSyncEvent({
+            transactionId: transaction.transactionId,
+            level: bankSync.applied ? "info" : "warn",
+            stage: "local-db-bank-sync",
+            message: bankSync.applied
+              ? "Synchronized bank records to legacy bank tables"
+              : "Skipped legacy bank synchronization",
+            details: bankSync,
+          });
+        }
+      }
+
+      if (isBranchKey(config.key)) {
+        if (recordsToProcess.length === 0) {
+          await logSyncEvent({
+            transactionId: transaction.transactionId,
+            level: "warn",
+            stage: "local-db-branch-sync",
+            message: "Skipped legacy branch sync because there were no branch records to apply",
+          });
+        } else {
+          const branchSync = await syncBranchToLegacyTable({
+            records: recordsToProcess,
+          });
+
+          await logSyncEvent({
+            transactionId: transaction.transactionId,
+            level: branchSync.applied ? "info" : "warn",
+            stage: "local-db-branch-sync",
+            message: branchSync.applied
+              ? "Synchronized branch records to legacy tblRefBranch"
+              : "Skipped legacy tblRefBranch synchronization",
+            details: branchSync,
+          });
+        }
+      }
+
+      if (isSerialNumbersKey(config.key)) {
+        if (recordsToProcess.length === 0) {
+          await logSyncEvent({
+            transactionId: transaction.transactionId,
+            level: "warn",
+            stage: "local-db-serial-number-sync",
+            message: "Skipped legacy tblRefItem_SN sync because there were no serial-number records to apply",
+          });
+        } else {
+          const serialNumberSync = await syncSerialNumbersToLegacyTable({
+            records: recordsToProcess,
+          });
+
+          await logSyncEvent({
+            transactionId: transaction.transactionId,
+            level: serialNumberSync.applied ? "info" : "warn",
+            stage: "local-db-serial-number-sync",
+            message: serialNumberSync.applied
+              ? "Synchronized serial-number records to legacy tblRefItem_SN"
+              : "Skipped legacy tblRefItem_SN synchronization",
+            details: serialNumberSync,
           });
         }
       }

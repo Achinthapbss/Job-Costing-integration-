@@ -1,5 +1,8 @@
 import sql, { config as SqlConfig } from "mssql";
 
+import { AccountLegacyRow, mapAccountLegacyRow } from "@/lib/account-master";
+import { BankLegacyRow, mapBankLegacyRow } from "@/lib/bank-master";
+import { BranchLegacyRow, mapBranchLegacyRow } from "@/lib/branch-master";
 import {
   CurrencyLegacyRow,
   CurrencyRateLegacyRow,
@@ -10,14 +13,31 @@ import {
 } from "@/lib/currency-master";
 import { CustomerLegacyRow, mapCustomerLegacyRow } from "@/lib/customer-master";
 import {
+  DistributionRuleLegacyRow,
+  mapDistributionRuleLegacyRow,
+} from "@/lib/distribution-rule-master";
+import {
   countItemWarehouseCandidates,
   ItemWarehouseLegacyRow,
   mapItemWarehouseLegacyRows,
 } from "@/lib/item-warehouse-master";
+import { ItemLegacyRow, mapItemLegacyRow } from "@/lib/item-master";
+import { LoginUserLegacyRow, mapLoginUserLegacyRow } from "@/lib/login-user-master";
+import { mapPriceListLegacyRows, PriceListLegacyRow } from "@/lib/price-list-master";
+import { mapProjectLegacyRow, ProjectLegacyRow } from "@/lib/project-master";
+import { mapSerialNumberLegacyRow, SerialNumberLegacyRow } from "@/lib/serial-number-master";
 import { mapPeriodLegacyRow, PeriodLegacyRow } from "@/lib/period-master";
+import { mapSalesRepLegacyRow, SalesRepLegacyRow } from "@/lib/sales-rep-master";
 import { mapTaxCodeLegacyRow, TaxCodeLegacyRow } from "@/lib/tax-master";
+import {
+  mapUomConversionLegacyRows,
+  UomConversionLegacyRow,
+  UomFormulaLegacyRow,
+} from "@/lib/uom-conversion-master";
+import { mapUomGroupLegacyRow, UomGroupLegacyRow } from "@/lib/uom-group-master";
 import { mapUomLegacyRow, UomLegacyRow } from "@/lib/uom-master";
 import { mapWarehouseMasterLegacyRow, WarehouseMasterLegacyRow } from "@/lib/warehouse-master";
+import { mapVendorLegacyRow, VendorLegacyRow } from "@/lib/vendor-master";
 
 interface LocalDbEnv {
   enabled: boolean;
@@ -52,7 +72,47 @@ export interface CurrencyLegacySyncResult {
   reason?: string;
 }
 
+export interface VendorLegacySyncResult {
+  applied: boolean;
+  processedCount: number;
+  skippedCount: number;
+  executionMode?: "stored-procedure" | "direct-sql";
+  reason?: string;
+}
+
+export interface SalesRepLegacySyncResult {
+  applied: boolean;
+  processedCount: number;
+  skippedCount: number;
+  executionMode?: "stored-procedure" | "direct-sql";
+  reason?: string;
+}
+
+export interface LoginUsersLegacySyncResult {
+  applied: boolean;
+  processedCount: number;
+  skippedCount: number;
+  executionMode?: "stored-procedure" | "direct-sql";
+  reason?: string;
+}
+
+export interface DistributionRuleLegacySyncResult {
+  applied: boolean;
+  processedCount: number;
+  skippedCount: number;
+  executionMode?: "stored-procedure" | "direct-sql";
+  reason?: string;
+}
+
 export interface CustomerLegacySyncResult {
+  applied: boolean;
+  processedCount: number;
+  skippedCount: number;
+  executionMode?: "stored-procedure" | "direct-sql";
+  reason?: string;
+}
+
+export interface AccountsLegacySyncResult {
   applied: boolean;
   processedCount: number;
   skippedCount: number;
@@ -77,6 +137,70 @@ export interface PeriodLegacySyncResult {
 }
 
 export interface ItemWarehouseLegacySyncResult {
+  applied: boolean;
+  processedCount: number;
+  skippedCount: number;
+  executionMode?: "stored-procedure" | "direct-sql";
+  reason?: string;
+}
+
+export interface ProjectLegacySyncResult {
+  applied: boolean;
+  processedCount: number;
+  skippedCount: number;
+  executionMode?: "stored-procedure" | "direct-sql";
+  reason?: string;
+}
+
+export interface PriceListLegacySyncResult {
+  applied: boolean;
+  processedCount: number;
+  skippedCount: number;
+  executionMode?: "stored-procedure" | "direct-sql";
+  reason?: string;
+}
+
+export interface ItemLegacySyncResult {
+  applied: boolean;
+  processedCount: number;
+  skippedCount: number;
+  executionMode?: "stored-procedure" | "direct-sql";
+  reason?: string;
+}
+
+export interface UomGroupLegacySyncResult {
+  applied: boolean;
+  processedCount: number;
+  skippedCount: number;
+  executionMode?: "stored-procedure" | "direct-sql";
+  reason?: string;
+}
+
+export interface UomConversionLegacySyncResult {
+  applied: boolean;
+  processedCount: number;
+  skippedCount: number;
+  executionMode?: "stored-procedure" | "direct-sql";
+  reason?: string;
+}
+
+export interface BankLegacySyncResult {
+  applied: boolean;
+  processedCount: number;
+  skippedCount: number;
+  executionMode?: "stored-procedure" | "direct-sql";
+  reason?: string;
+}
+
+export interface BranchLegacySyncResult {
+  applied: boolean;
+  processedCount: number;
+  skippedCount: number;
+  executionMode?: "stored-procedure" | "direct-sql";
+  reason?: string;
+}
+
+export interface SerialNumberLegacySyncResult {
   applied: boolean;
   processedCount: number;
   skippedCount: number;
@@ -430,6 +554,237 @@ export async function insertMasterDataRawBatch(input: {
   }
 }
 
+export async function syncAccountsToLegacyTable(input: {
+  records: unknown[];
+}): Promise<AccountsLegacySyncResult> {
+  if (!isLocalDbMasterDataWriteEnabled()) {
+    return {
+      applied: false,
+      processedCount: 0,
+      skippedCount: input.records.length,
+      reason: "LOCAL_DB accounts sync is disabled",
+    };
+  }
+
+  const mappedRows = input.records
+    .map((record) => mapAccountLegacyRow(record))
+    .filter((record): record is AccountLegacyRow => record !== null);
+
+  if (mappedRows.length === 0) {
+    return {
+      applied: false,
+      processedCount: 0,
+      skippedCount: input.records.length,
+      reason: "No account rows could be mapped to the legacy tblRefAccounts shape",
+    };
+  }
+
+  await ensureSchema();
+  const pool = await getPool();
+  const procedureCheck = await pool.request().query(`
+    SELECT
+      CASE WHEN OBJECT_ID('dbo.tblRefAccounts_Clear_UpdateInactive', 'P') IS NULL THEN 0 ELSE 1 END AS hasClearProcedure,
+      CASE WHEN OBJECT_ID('dbo.tblRefAccounts_Insert', 'P') IS NULL THEN 0 ELSE 1 END AS hasInsertProcedure,
+      CASE WHEN OBJECT_ID('dbo.tblRefAccounts_UpdateInactive', 'P') IS NULL THEN 0 ELSE 1 END AS hasUpdateInactiveProcedure;
+  `);
+
+  const hasClearProcedure = procedureCheck.recordset?.[0]?.hasClearProcedure === 1;
+  const hasInsertProcedure = procedureCheck.recordset?.[0]?.hasInsertProcedure === 1;
+  const hasUpdateInactiveProcedure = procedureCheck.recordset?.[0]?.hasUpdateInactiveProcedure === 1;
+
+  if (hasClearProcedure && hasInsertProcedure && hasUpdateInactiveProcedure) {
+    const transaction = new sql.Transaction(pool);
+    await transaction.begin();
+
+    try {
+      await new sql.Request(transaction).execute("dbo.tblRefAccounts_Clear_UpdateInactive");
+
+      for (const record of mappedRows) {
+        await new sql.Request(transaction)
+          .input("Account", sql.VarChar(50), record.account)
+          .input("Master_Sub_Account", sql.VarChar(50), record.masterSubAccount)
+          .input("Account_Type", sql.VarChar(50), record.accountType)
+          .input("AccountLink", sql.VarChar(500), record.accountLink)
+          .input("Description", sql.VarChar(500), record.description)
+          .input("TaxLink", sql.Int, record.taxLink)
+          .input("Status", sql.Bit, record.status)
+          .execute("dbo.tblRefAccounts_Insert");
+      }
+
+      await new sql.Request(transaction).execute("dbo.tblRefAccounts_UpdateInactive");
+      await transaction.commit();
+
+      return {
+        applied: true,
+        processedCount: mappedRows.length,
+        skippedCount: input.records.length - mappedRows.length,
+        executionMode: "stored-procedure",
+      };
+    } catch (error) {
+      await transaction.rollback();
+      throw error;
+    }
+  }
+
+  const fallbackReason =
+    hasClearProcedure || hasInsertProcedure || hasUpdateInactiveProcedure
+      ? "Accounts stored procedure set was incomplete; fell back to direct SQL"
+      : undefined;
+
+  const tableCheck = await pool.request().query(`
+    SELECT CASE WHEN OBJECT_ID('dbo.tblRefAccounts', 'U') IS NULL THEN 0 ELSE 1 END AS hasTable;
+  `);
+
+  if (tableCheck.recordset?.[0]?.hasTable !== 1) {
+    return {
+      applied: false,
+      processedCount: 0,
+      skippedCount: input.records.length,
+      reason: "dbo.tblRefAccounts was not found in LOCAL_DB",
+    };
+  }
+
+  const columnsResult = await pool.request().query(`
+    SELECT [name]
+    FROM sys.columns
+    WHERE object_id = OBJECT_ID('dbo.tblRefAccounts', 'U');
+  `);
+
+  const availableColumns = new Set(
+    (columnsResult.recordset ?? []).map((record) => String(record.name))
+  );
+
+  if (!availableColumns.has("AccountLink_1")) {
+    return {
+      applied: false,
+      processedCount: 0,
+      skippedCount: input.records.length,
+      reason: "tblRefAccounts does not expose AccountLink_1, so legacy accounts upsert cannot run",
+    };
+  }
+
+  const accountColumns = [
+    { column: "Account", param: "Account" },
+    { column: "Master_Sub_Account", param: "Master_Sub_Account" },
+    { column: "Account_Type", param: "Account_Type" },
+    { column: "AccountLink_1", param: "AccountLink_1" },
+    { column: "Description", param: "Description" },
+    { column: "TaxLink", param: "TaxLink" },
+    { column: "Status", param: "Status" },
+  ].filter((entry) => availableColumns.has(entry.column));
+
+  const hasStatus = availableColumns.has("Status");
+  const hasImportStatus = availableColumns.has("ImportStatus");
+
+  const updateParts = accountColumns
+    .filter((entry) => entry.column !== "AccountLink_1")
+    .map((entry) => `[${entry.column}] = @${entry.param}`);
+
+  if (hasImportStatus) {
+    updateParts.push("[ImportStatus] = 1");
+  }
+
+  const updateAssignments =
+    updateParts.length > 0 ? updateParts.join(",\n              ") : "[AccountLink_1] = @AccountLink_1";
+
+  const insertColumns = accountColumns.map((entry) => `[${entry.column}]`);
+  const insertValues = accountColumns.map((entry) => `@${entry.param}`);
+
+  if (hasImportStatus) {
+    insertColumns.push("[ImportStatus]");
+    insertValues.push("1");
+  }
+
+  const transaction = new sql.Transaction(pool);
+  await transaction.begin();
+
+  try {
+    if (hasImportStatus) {
+      await new sql.Request(transaction).query("UPDATE dbo.tblRefAccounts SET ImportStatus = 0;");
+    }
+
+    await new sql.Request(transaction).query(`
+      CREATE TABLE #ImportedAccounts (
+        AccountLink_1 VARCHAR(500) NOT NULL PRIMARY KEY
+      );
+    `);
+
+    for (const record of mappedRows) {
+      await new sql.Request(transaction)
+        .input("Account", sql.VarChar(50), record.account)
+        .input("Master_Sub_Account", sql.VarChar(50), record.masterSubAccount)
+        .input("Account_Type", sql.VarChar(50), record.accountType)
+        .input("AccountLink_1", sql.VarChar(500), record.accountLink)
+        .input("Description", sql.VarChar(500), record.description)
+        .input("TaxLink", sql.Int, record.taxLink)
+        .input("Status", sql.Bit, record.status)
+        .query(`
+          IF EXISTS (SELECT 1 FROM dbo.tblRefAccounts WHERE AccountLink_1 = @AccountLink_1)
+          BEGIN
+            UPDATE dbo.tblRefAccounts
+            SET
+              ${updateAssignments}
+            WHERE AccountLink_1 = @AccountLink_1;
+          END
+          ELSE
+          BEGIN
+            INSERT INTO dbo.tblRefAccounts (
+              ${insertColumns.join(",\n              ")}
+            )
+            VALUES (
+              ${insertValues.join(",\n              ")}
+            );
+          END;
+
+          IF NOT EXISTS (SELECT 1 FROM #ImportedAccounts WHERE AccountLink_1 = @AccountLink_1)
+          BEGIN
+            INSERT INTO #ImportedAccounts (AccountLink_1)
+            VALUES (@AccountLink_1);
+          END;
+        `);
+    }
+
+    if (hasStatus) {
+      if (hasImportStatus) {
+        await new sql.Request(transaction).query(`
+          UPDATE dbo.tblRefAccounts
+          SET [Status] = 0
+          WHERE ImportStatus = 0;
+        `);
+      } else {
+        await new sql.Request(transaction).query(`
+          UPDATE dbo.tblRefAccounts
+          SET [Status] = 0
+          WHERE NOT EXISTS (
+            SELECT 1
+            FROM #ImportedAccounts imported
+            WHERE imported.AccountLink_1 = dbo.tblRefAccounts.AccountLink_1
+          );
+        `);
+      }
+    }
+
+    await transaction.commit();
+
+    return {
+      applied: true,
+      processedCount: mappedRows.length,
+      skippedCount: input.records.length - mappedRows.length,
+      executionMode: "direct-sql",
+      reason: combineReasons(
+        fallbackReason,
+        !hasStatus ? "tblRefAccounts does not expose Status; inactive rows could not be marked" : undefined,
+        !hasImportStatus && hasStatus
+          ? "tblRefAccounts does not expose ImportStatus; inactive rows were derived using imported AccountLink_1 values"
+          : undefined
+      ),
+    };
+  } catch (error) {
+    await transaction.rollback();
+    throw error;
+  }
+}
+
 export async function syncCustomerToLegacyTable(input: {
   records: unknown[];
 }): Promise<CustomerLegacySyncResult> {
@@ -712,6 +1067,1026 @@ export async function syncCustomerToLegacyTable(input: {
         !hasStatus ? "tblRefCustomer does not expose Status; inactive rows could not be marked" : undefined,
         !hasImportStatus
           ? "tblRefCustomer does not expose ImportStatus; imported rows are matched only by CustCode"
+          : undefined
+      ),
+    };
+  } catch (error) {
+    await transaction.rollback();
+    throw error;
+  }
+}
+
+export async function syncVendorToLegacyTable(input: {
+  records: unknown[];
+}): Promise<VendorLegacySyncResult> {
+  if (!isLocalDbMasterDataWriteEnabled()) {
+    return {
+      applied: false,
+      processedCount: 0,
+      skippedCount: input.records.length,
+      reason: "LOCAL_DB vendor sync is disabled",
+    };
+  }
+
+  const mappedRows = input.records
+    .map((record) => mapVendorLegacyRow(record))
+    .filter((record): record is VendorLegacyRow => record !== null);
+
+  if (mappedRows.length === 0) {
+    return {
+      applied: false,
+      processedCount: 0,
+      skippedCount: input.records.length,
+      reason: "No vendor rows could be mapped to the legacy tblRefVendor shape",
+    };
+  }
+
+  await ensureSchema();
+  const pool = await getPool();
+
+  const procedureCheck = await pool.request().query(`
+    SELECT
+      CASE WHEN OBJECT_ID('dbo.tblRefVendor_Update_ImportStatus', 'P') IS NULL THEN 0 ELSE 1 END AS hasUpdateImportStatusProcedure,
+      CASE WHEN OBJECT_ID('dbo.tblRefVendor_Insert', 'P') IS NULL THEN 0 ELSE 1 END AS hasInsertProcedure,
+      CASE WHEN OBJECT_ID('dbo.tblRefVendor_UpdateInactive', 'P') IS NULL THEN 0 ELSE 1 END AS hasUpdateInactiveProcedure;
+  `);
+
+  const hasUpdateImportStatusProcedure =
+    procedureCheck.recordset?.[0]?.hasUpdateImportStatusProcedure === 1;
+  const hasInsertProcedure = procedureCheck.recordset?.[0]?.hasInsertProcedure === 1;
+  const hasUpdateInactiveProcedure = procedureCheck.recordset?.[0]?.hasUpdateInactiveProcedure === 1;
+
+  if (hasUpdateImportStatusProcedure && hasInsertProcedure && hasUpdateInactiveProcedure) {
+    const transaction = new sql.Transaction(pool);
+    await transaction.begin();
+
+    try {
+      await new sql.Request(transaction).execute("dbo.tblRefVendor_Update_ImportStatus");
+
+      for (const record of mappedRows) {
+        await new sql.Request(transaction)
+          .input("VendorCode", sql.VarChar(20), record.vendorCode)
+          .input("VendorName", sql.VarChar(100), record.vendorName)
+          .input("ImportStatus", sql.Bit, true)
+          .input("Status", sql.Bit, record.status)
+          .input("TaxLink", sql.Int, record.taxLink)
+          .input("Address", sql.VarChar(500), record.address)
+          .input("Fax", sql.VarChar(500), record.fax)
+          .input("Email", sql.VarChar(500), record.email)
+          .input("TPNo", sql.VarChar(500), record.tpNo)
+          .input("CurrencyCode", sql.VarChar(50), record.currencyCode)
+          .execute("dbo.tblRefVendor_Insert");
+      }
+
+      await new sql.Request(transaction).execute("dbo.tblRefVendor_UpdateInactive");
+      await transaction.commit();
+
+      return {
+        applied: true,
+        processedCount: mappedRows.length,
+        skippedCount: input.records.length - mappedRows.length,
+        executionMode: "stored-procedure",
+      };
+    } catch (error) {
+      await transaction.rollback();
+      throw error;
+    }
+  }
+
+  const fallbackReason =
+    hasUpdateImportStatusProcedure || hasInsertProcedure || hasUpdateInactiveProcedure
+      ? "Vendor stored procedure set was incomplete; fell back to direct SQL"
+      : undefined;
+
+  const tableCheck = await pool.request().query(`
+    SELECT CASE WHEN OBJECT_ID('dbo.tblRefVendor', 'U') IS NULL THEN 0 ELSE 1 END AS hasTable;
+  `);
+
+  if (tableCheck.recordset?.[0]?.hasTable !== 1) {
+    return {
+      applied: false,
+      processedCount: 0,
+      skippedCount: input.records.length,
+      reason: "dbo.tblRefVendor was not found in LOCAL_DB",
+    };
+  }
+
+  const columnsResult = await pool.request().query(`
+    SELECT [name]
+    FROM sys.columns
+    WHERE object_id = OBJECT_ID('dbo.tblRefVendor', 'U');
+  `);
+
+  const availableColumns = new Set(
+    (columnsResult.recordset ?? []).map((record) => String(record.name))
+  );
+
+  if (!availableColumns.has("VendorCode")) {
+    return {
+      applied: false,
+      processedCount: 0,
+      skippedCount: input.records.length,
+      reason: "tblRefVendor does not expose VendorCode, so legacy vendor upsert cannot run",
+    };
+  }
+
+  const vendorColumns = [
+    { column: "VendorCode", param: "VendorCode" },
+    { column: "VendorName", param: "VendorName" },
+    { column: "Status", param: "Status" },
+    { column: "TaxLink", param: "TaxLink" },
+    { column: "Address", param: "Address" },
+    { column: "Fax", param: "Fax" },
+    { column: "Email", param: "Email" },
+    { column: "TPNo", param: "TPNo" },
+    { column: "CurrencyCode", param: "CurrencyCode" },
+  ].filter((entry) => availableColumns.has(entry.column));
+
+  const hasStatus = availableColumns.has("Status");
+  const hasImportStatus = availableColumns.has("ImportStatus");
+
+  const updateParts = vendorColumns
+    .filter((entry) => entry.column !== "VendorCode")
+    .map((entry) => `[${entry.column}] = @${entry.param}`);
+
+  if (hasImportStatus) {
+    updateParts.push("[ImportStatus] = 1");
+  }
+
+  const updateAssignments =
+    updateParts.length > 0
+      ? updateParts.join(",\n              ")
+      : "[VendorCode] = @VendorCode";
+
+  const insertColumns = vendorColumns.map((entry) => `[${entry.column}]`);
+  const insertValues = vendorColumns.map((entry) => `@${entry.param}`);
+
+  if (hasImportStatus) {
+    insertColumns.push("[ImportStatus]");
+    insertValues.push("1");
+  }
+
+  const transaction = new sql.Transaction(pool);
+  await transaction.begin();
+
+  try {
+    if (hasImportStatus) {
+      await new sql.Request(transaction).query("UPDATE dbo.tblRefVendor SET ImportStatus = 0;");
+    }
+
+    await new sql.Request(transaction).query(`
+      CREATE TABLE #ImportedVendors (
+        VendorCode VARCHAR(20) NOT NULL PRIMARY KEY
+      );
+    `);
+
+    for (const record of mappedRows) {
+      await new sql.Request(transaction)
+        .input("VendorCode", sql.VarChar(20), record.vendorCode)
+        .input("VendorName", sql.VarChar(100), record.vendorName)
+        .input("Status", sql.Bit, record.status)
+        .input("TaxLink", sql.Int, record.taxLink)
+        .input("Address", sql.VarChar(500), record.address)
+        .input("Fax", sql.VarChar(500), record.fax)
+        .input("Email", sql.VarChar(500), record.email)
+        .input("TPNo", sql.VarChar(500), record.tpNo)
+        .input("CurrencyCode", sql.VarChar(50), record.currencyCode)
+        .query(`
+          IF EXISTS (SELECT 1 FROM dbo.tblRefVendor WHERE VendorCode = @VendorCode)
+          BEGIN
+            UPDATE dbo.tblRefVendor
+            SET
+              ${updateAssignments}
+            WHERE VendorCode = @VendorCode;
+          END
+          ELSE
+          BEGIN
+            INSERT INTO dbo.tblRefVendor (
+              ${insertColumns.join(",\n              ")}
+            )
+            VALUES (
+              ${insertValues.join(",\n              ")}
+            );
+          END;
+
+          IF NOT EXISTS (SELECT 1 FROM #ImportedVendors WHERE VendorCode = @VendorCode)
+          BEGIN
+            INSERT INTO #ImportedVendors (VendorCode)
+            VALUES (@VendorCode);
+          END;
+        `);
+    }
+
+    if (hasStatus) {
+      if (hasImportStatus) {
+        // Mirror tblRefVendor_UpdateInactive: delete rows with ImportStatus=0 and Status=0
+        await new sql.Request(transaction).query(`
+          UPDATE dbo.tblRefVendor
+          SET [Status] = 0
+          WHERE ImportStatus = 0;
+
+          DELETE FROM dbo.tblRefVendor
+          WHERE ImportStatus = 0 AND ISNULL([Status], 0) = 0;
+        `);
+      } else {
+        await new sql.Request(transaction).query(`
+          UPDATE dbo.tblRefVendor
+          SET [Status] = 0
+          WHERE NOT EXISTS (
+            SELECT 1
+            FROM #ImportedVendors imported
+            WHERE imported.VendorCode = dbo.tblRefVendor.VendorCode
+          );
+        `);
+      }
+    } else if (hasImportStatus) {
+      await new sql.Request(transaction).query(`
+        UPDATE dbo.tblRefVendor
+        SET ImportStatus = 0
+        WHERE NOT EXISTS (
+          SELECT 1
+          FROM #ImportedVendors imported
+          WHERE imported.VendorCode = dbo.tblRefVendor.VendorCode
+        );
+      `);
+    }
+
+    await transaction.commit();
+
+    return {
+      applied: true,
+      processedCount: mappedRows.length,
+      skippedCount: input.records.length - mappedRows.length,
+      executionMode: "direct-sql",
+      reason: combineReasons(
+        fallbackReason,
+        !hasStatus ? "tblRefVendor does not expose Status; inactive rows could not be marked" : undefined,
+        !hasImportStatus && hasStatus
+          ? "tblRefVendor does not expose ImportStatus; inactive rows were derived using imported VendorCode values"
+          : undefined
+      ),
+    };
+  } catch (error) {
+    await transaction.rollback();
+    throw error;
+  }
+}
+
+export async function syncSalesRepToLegacyTable(input: {
+  records: unknown[];
+}): Promise<SalesRepLegacySyncResult> {
+  if (!isLocalDbMasterDataWriteEnabled()) {
+    return {
+      applied: false,
+      processedCount: 0,
+      skippedCount: input.records.length,
+      reason: "LOCAL_DB sales rep sync is disabled",
+    };
+  }
+
+  const mappedRows = input.records
+    .map((record) => mapSalesRepLegacyRow(record))
+    .filter((record): record is SalesRepLegacyRow => record !== null);
+
+  if (mappedRows.length === 0) {
+    return {
+      applied: false,
+      processedCount: 0,
+      skippedCount: input.records.length,
+      reason: "No sales rep rows could be mapped to the legacy tblRefSalesRep shape",
+    };
+  }
+
+  await ensureSchema();
+  const pool = await getPool();
+
+  const procedureCheck = await pool.request().query(`
+    SELECT
+      CASE WHEN OBJECT_ID('dbo.tblRefSalesRep_Clear_UpdateInactive', 'P') IS NULL THEN 0 ELSE 1 END AS hasClearProcedure,
+      CASE WHEN OBJECT_ID('dbo.tblRefSalesRep_Insert', 'P') IS NULL THEN 0 ELSE 1 END AS hasInsertProcedure,
+      CASE WHEN OBJECT_ID('dbo.tblRefSalesRep_UpdateInactive', 'P') IS NULL THEN 0 ELSE 1 END AS hasUpdateInactiveProcedure;
+  `);
+
+  const hasClearProcedure = procedureCheck.recordset?.[0]?.hasClearProcedure === 1;
+  const hasInsertProcedure = procedureCheck.recordset?.[0]?.hasInsertProcedure === 1;
+  const hasUpdateInactiveProcedure = procedureCheck.recordset?.[0]?.hasUpdateInactiveProcedure === 1;
+
+  if (hasClearProcedure && hasInsertProcedure && hasUpdateInactiveProcedure) {
+    const transaction = new sql.Transaction(pool);
+    await transaction.begin();
+
+    try {
+      await new sql.Request(transaction).execute("dbo.tblRefSalesRep_Clear_UpdateInactive");
+
+      for (const record of mappedRows) {
+        await new sql.Request(transaction)
+          .input("RepID", sql.VarChar(100), record.repId)
+          .input("LastName", sql.VarChar(sql.MAX), record.lastName)
+          .input("UserID", sql.Int, record.userId)
+          .input("Status", sql.Bit, record.status)
+          .execute("dbo.tblRefSalesRep_Insert");
+      }
+
+      await new sql.Request(transaction).execute("dbo.tblRefSalesRep_UpdateInactive");
+      await transaction.commit();
+
+      return {
+        applied: true,
+        processedCount: mappedRows.length,
+        skippedCount: input.records.length - mappedRows.length,
+        executionMode: "stored-procedure",
+      };
+    } catch (error) {
+      await transaction.rollback();
+      throw error;
+    }
+  }
+
+  const fallbackReason =
+    hasClearProcedure || hasInsertProcedure || hasUpdateInactiveProcedure
+      ? "Sales rep stored procedure set was incomplete; fell back to direct SQL"
+      : undefined;
+
+  const tableCheck = await pool.request().query(`
+    SELECT CASE WHEN OBJECT_ID('dbo.tblRefSalesRep', 'U') IS NULL THEN 0 ELSE 1 END AS hasTable;
+  `);
+
+  if (tableCheck.recordset?.[0]?.hasTable !== 1) {
+    return {
+      applied: false,
+      processedCount: 0,
+      skippedCount: input.records.length,
+      reason: "dbo.tblRefSalesRep was not found in LOCAL_DB",
+    };
+  }
+
+  const columnsResult = await pool.request().query(`
+    SELECT [name]
+    FROM sys.columns
+    WHERE object_id = OBJECT_ID('dbo.tblRefSalesRep', 'U');
+  `);
+
+  const availableColumns = new Set(
+    (columnsResult.recordset ?? []).map((record) => String(record.name))
+  );
+
+  if (!availableColumns.has("RepID")) {
+    return {
+      applied: false,
+      processedCount: 0,
+      skippedCount: input.records.length,
+      reason: "tblRefSalesRep does not expose RepID, so legacy sales rep upsert cannot run",
+    };
+  }
+
+  const salesRepColumns = [
+    { column: "RepID", param: "RepID" },
+    { column: "LastName", param: "LastName" },
+    { column: "UserID", param: "UserID" },
+    { column: "Status", param: "Status" },
+  ].filter((entry) => availableColumns.has(entry.column));
+
+  const hasStatus = availableColumns.has("Status");
+  const hasImportStatus = availableColumns.has("ImportStatus");
+  const hasRepLink = availableColumns.has("RepLink");
+
+  const updateParts = salesRepColumns
+    .filter((entry) => entry.column !== "RepID")
+    .map((entry) => `[${entry.column}] = @${entry.param}`);
+
+  if (hasImportStatus) {
+    updateParts.push("[ImportStatus] = 1");
+  }
+
+  const updateAssignments =
+    updateParts.length > 0 ? updateParts.join(",\n              ") : "[RepID] = @RepID";
+
+  const insertColumns = salesRepColumns.map((entry) => `[${entry.column}]`);
+  const insertValues = salesRepColumns.map((entry) => `@${entry.param}`);
+
+  if (hasImportStatus) {
+    insertColumns.push("[ImportStatus]");
+    insertValues.push("1");
+  }
+
+  const transaction = new sql.Transaction(pool);
+  await transaction.begin();
+
+  try {
+    if (hasImportStatus) {
+      await new sql.Request(transaction).query("UPDATE dbo.tblRefSalesRep SET ImportStatus = 0;");
+    }
+
+    await new sql.Request(transaction).query(`
+      CREATE TABLE #ImportedSalesReps (
+        RepID VARCHAR(100) NOT NULL PRIMARY KEY
+      );
+    `);
+
+    for (const record of mappedRows) {
+      await new sql.Request(transaction)
+        .input("RepID", sql.VarChar(100), record.repId)
+        .input("LastName", sql.VarChar(sql.MAX), record.lastName)
+        .input("UserID", sql.Int, record.userId)
+        .input("Status", sql.Bit, record.status)
+        .query(`
+          IF EXISTS (SELECT 1 FROM dbo.tblRefSalesRep WHERE RepID = @RepID)
+          BEGIN
+            UPDATE dbo.tblRefSalesRep
+            SET
+              ${updateAssignments}
+            WHERE RepID = @RepID;
+          END
+          ELSE
+          BEGIN
+            INSERT INTO dbo.tblRefSalesRep (
+              ${insertColumns.join(",\n              ")}
+            )
+            VALUES (
+              ${insertValues.join(",\n              ")}
+            );
+          END;
+
+          IF NOT EXISTS (SELECT 1 FROM #ImportedSalesReps WHERE RepID = @RepID)
+          BEGIN
+            INSERT INTO #ImportedSalesReps (RepID)
+            VALUES (@RepID);
+          END;
+        `);
+    }
+
+    if (hasStatus && hasImportStatus && hasRepLink) {
+      await new sql.Request(transaction).query(`
+        IF OBJECT_ID('dbo.tblTransEstimateHeader', 'U') IS NOT NULL
+        BEGIN
+          UPDATE salesRep
+          SET [Status] = 0
+          FROM dbo.tblRefSalesRep salesRep
+          WHERE salesRep.ImportStatus = 0
+            AND salesRep.RepLink IN (
+              SELECT SalesRepLink FROM dbo.tblTransEstimateHeader
+            );
+        END;
+
+        IF OBJECT_ID('dbo.tblTransBOMHeader', 'U') IS NOT NULL
+        BEGIN
+          UPDATE salesRep
+          SET [Status] = 0
+          FROM dbo.tblRefSalesRep salesRep
+          WHERE salesRep.ImportStatus = 0
+            AND salesRep.RepLink IN (
+              SELECT SalesRepLink FROM dbo.tblTransBOMHeader
+            );
+        END;
+
+        IF OBJECT_ID('dbo.tblTransCreditNoteHeader', 'U') IS NOT NULL
+        BEGIN
+          UPDATE salesRep
+          SET [Status] = 0
+          FROM dbo.tblRefSalesRep salesRep
+          WHERE salesRep.ImportStatus = 0
+            AND salesRep.RepLink IN (
+              SELECT RepLink FROM dbo.tblTransCreditNoteHeader
+            );
+        END;
+
+        IF OBJECT_ID('dbo.tblTransInvoiceHeader', 'U') IS NOT NULL
+        BEGIN
+          UPDATE salesRep
+          SET [Status] = 0
+          FROM dbo.tblRefSalesRep salesRep
+          WHERE salesRep.ImportStatus = 0
+            AND salesRep.RepLink IN (
+              SELECT SalesRepLink FROM dbo.tblTransInvoiceHeader
+            );
+        END;
+
+        DELETE FROM dbo.tblRefSalesRep
+        WHERE ImportStatus = 0 AND ISNULL([Status], 0) = 0;
+      `);
+    } else if (hasStatus) {
+      if (hasImportStatus) {
+        await new sql.Request(transaction).query(`
+          UPDATE dbo.tblRefSalesRep
+          SET [Status] = 0
+          WHERE ImportStatus = 0;
+
+          DELETE FROM dbo.tblRefSalesRep
+          WHERE ImportStatus = 0 AND ISNULL([Status], 0) = 0;
+        `);
+      } else {
+        await new sql.Request(transaction).query(`
+          UPDATE dbo.tblRefSalesRep
+          SET [Status] = 0
+          WHERE NOT EXISTS (
+            SELECT 1
+            FROM #ImportedSalesReps imported
+            WHERE imported.RepID = dbo.tblRefSalesRep.RepID
+          );
+        `);
+      }
+    } else if (hasImportStatus) {
+      await new sql.Request(transaction).query(`
+        UPDATE dbo.tblRefSalesRep
+        SET ImportStatus = 0
+        WHERE NOT EXISTS (
+          SELECT 1
+          FROM #ImportedSalesReps imported
+          WHERE imported.RepID = dbo.tblRefSalesRep.RepID
+        );
+      `);
+    }
+
+    await transaction.commit();
+
+    return {
+      applied: true,
+      processedCount: mappedRows.length,
+      skippedCount: input.records.length - mappedRows.length,
+      executionMode: "direct-sql",
+      reason: combineReasons(
+        fallbackReason,
+        !hasStatus ? "tblRefSalesRep does not expose Status; inactive rows could not be marked" : undefined,
+        !hasImportStatus && hasStatus
+          ? "tblRefSalesRep does not expose ImportStatus; inactive rows were derived using imported RepID values"
+          : undefined,
+        hasStatus && hasImportStatus && !hasRepLink
+          ? "tblRefSalesRep does not expose RepLink; inactive sales reps were handled without transaction-link preservation"
+          : undefined
+      ),
+    };
+  } catch (error) {
+    await transaction.rollback();
+    throw error;
+  }
+}
+
+export async function syncLoginUsersToLegacyTable(input: {
+  records: unknown[];
+}): Promise<LoginUsersLegacySyncResult> {
+  if (!isLocalDbMasterDataWriteEnabled()) {
+    return {
+      applied: false,
+      processedCount: 0,
+      skippedCount: input.records.length,
+      reason: "LOCAL_DB login user sync is disabled",
+    };
+  }
+
+  const mappedRows = input.records
+    .map((record) => mapLoginUserLegacyRow(record))
+    .filter((record): record is LoginUserLegacyRow => record !== null);
+
+  if (mappedRows.length === 0) {
+    return {
+      applied: false,
+      processedCount: 0,
+      skippedCount: input.records.length,
+      reason: "No login user rows could be mapped to the legacy [Login] shape",
+    };
+  }
+
+  await ensureSchema();
+  const pool = await getPool();
+
+  const procedureCheck = await pool.request().query(`
+    SELECT
+      CASE WHEN OBJECT_ID('dbo.Login_Clear_UpdateInactive', 'P') IS NULL THEN 0 ELSE 1 END AS hasClearProcedure,
+      CASE WHEN OBJECT_ID('dbo.Login_Insert', 'P') IS NULL THEN 0 ELSE 1 END AS hasInsertProcedure,
+      CASE WHEN OBJECT_ID('dbo.Login_UpdateInactive', 'P') IS NULL THEN 0 ELSE 1 END AS hasUpdateInactiveProcedure;
+  `);
+
+  const hasClearProcedure = procedureCheck.recordset?.[0]?.hasClearProcedure === 1;
+  const hasInsertProcedure = procedureCheck.recordset?.[0]?.hasInsertProcedure === 1;
+  const hasUpdateInactiveProcedure = procedureCheck.recordset?.[0]?.hasUpdateInactiveProcedure === 1;
+
+  if (hasClearProcedure && hasInsertProcedure && hasUpdateInactiveProcedure) {
+    const transaction = new sql.Transaction(pool);
+    await transaction.begin();
+
+    try {
+      await new sql.Request(transaction).execute("dbo.Login_Clear_UpdateInactive");
+
+      for (const record of mappedRows) {
+        await new sql.Request(transaction)
+          .input("USER_CODE", sql.VarChar(50), record.userCode)
+          .input("USERID", sql.Int, record.userId)
+          .input("U_NAME", sql.VarChar(120), record.userName)
+          .input("Active", sql.Bit, record.active)
+          .execute("dbo.Login_Insert");
+      }
+
+      await new sql.Request(transaction).execute("dbo.Login_UpdateInactive");
+      await transaction.commit();
+
+      return {
+        applied: true,
+        processedCount: mappedRows.length,
+        skippedCount: input.records.length - mappedRows.length,
+        executionMode: "stored-procedure",
+      };
+    } catch (error) {
+      await transaction.rollback();
+      throw error;
+    }
+  }
+
+  const fallbackReason =
+    hasClearProcedure || hasInsertProcedure || hasUpdateInactiveProcedure
+      ? "Login users stored procedure set was incomplete; fell back to direct SQL"
+      : undefined;
+
+  const tableCheck = await pool.request().query(`
+    SELECT CASE WHEN OBJECT_ID('dbo.[Login]', 'U') IS NULL THEN 0 ELSE 1 END AS hasTable;
+  `);
+
+  if (tableCheck.recordset?.[0]?.hasTable !== 1) {
+    return {
+      applied: false,
+      processedCount: 0,
+      skippedCount: input.records.length,
+      reason: "dbo.[Login] was not found in LOCAL_DB",
+    };
+  }
+
+  const columnsResult = await pool.request().query(`
+    SELECT [name]
+    FROM sys.columns
+    WHERE object_id = OBJECT_ID('dbo.[Login]', 'U');
+  `);
+
+  const availableColumns = new Set(
+    (columnsResult.recordset ?? []).map((record) => String(record.name))
+  );
+
+  if (!availableColumns.has("UserID")) {
+    return {
+      applied: false,
+      processedCount: 0,
+      skippedCount: input.records.length,
+      reason: "[Login] does not expose UserID, so legacy login user upsert cannot run",
+    };
+  }
+
+  const hasId = availableColumns.has("Id");
+  const hasUserName = availableColumns.has("UserName");
+  const hasActive = availableColumns.has("Active");
+  const hasImportStatus = availableColumns.has("ImportStatus");
+
+  const transaction = new sql.Transaction(pool);
+  await transaction.begin();
+
+  try {
+    if (hasImportStatus) {
+      await new sql.Request(transaction).query("UPDATE dbo.[Login] SET ImportStatus = 0;");
+    }
+
+    for (const record of mappedRows) {
+      const updateParts: string[] = [];
+
+      if (hasActive) {
+        updateParts.push("[Active] = @Active");
+      }
+
+      if (hasUserName) {
+        updateParts.push("[UserName] = @UserName");
+      }
+
+      if (hasId) {
+        updateParts.push("[Id] = @Id");
+      }
+
+      if (hasImportStatus) {
+        updateParts.push("[ImportStatus] = 1");
+      }
+
+      const updateAssignments =
+        updateParts.length > 0 ? updateParts.join(",\n              ") : "[UserID] = [UserID]";
+
+      const insertColumns = ["[UserID]"];
+      const insertValues = ["@UserID"]; 
+
+      if (hasId) {
+        insertColumns.push("[Id]");
+        insertValues.push("@Id");
+      }
+
+      if (hasUserName) {
+        insertColumns.push("[UserName]");
+        insertValues.push("@UserName");
+      }
+
+      if (hasActive) {
+        // Mirror old Login_Insert: new rows are inserted as active.
+        insertColumns.push("[Active]");
+        insertValues.push("1");
+      }
+
+      if (hasImportStatus) {
+        insertColumns.push("[ImportStatus]");
+        insertValues.push("1");
+      }
+
+      await new sql.Request(transaction)
+        .input("UserID", sql.VarChar(50), record.userCode)
+        .input("Id", sql.Int, record.userId)
+        .input("UserName", sql.VarChar(120), record.userName)
+        .input("Active", sql.Bit, record.active)
+        .query(`
+          IF EXISTS (SELECT 1 FROM dbo.[Login] WHERE [UserID] = @UserID)
+          BEGIN
+            UPDATE dbo.[Login]
+            SET
+              ${updateAssignments}
+            WHERE [UserID] = @UserID;
+          END
+          ELSE
+          BEGIN
+            INSERT INTO dbo.[Login] (
+              ${insertColumns.join(",\n              ")}
+            )
+            VALUES (
+              ${insertValues.join(",\n              ")}
+            );
+          END;
+        `);
+    }
+
+    if (hasActive && hasImportStatus) {
+      await new sql.Request(transaction).query(`
+        IF OBJECT_ID('dbo.tabTransactionLog', 'U') IS NOT NULL
+        BEGIN
+          UPDATE loginUser
+          SET [Active] = 0
+          FROM dbo.[Login] loginUser
+          WHERE loginUser.ImportStatus = 0
+            AND loginUser.[UserName] IN (
+              SELECT [User]
+              FROM dbo.tabTransactionLog
+            );
+        END;
+
+        UPDATE dbo.[Login]
+        SET [ImportStatus] = 0;
+      `);
+    } else if (hasImportStatus) {
+      await new sql.Request(transaction).query("UPDATE dbo.[Login] SET [ImportStatus] = 0;");
+    }
+
+    await transaction.commit();
+
+    return {
+      applied: true,
+      processedCount: mappedRows.length,
+      skippedCount: input.records.length - mappedRows.length,
+      executionMode: "direct-sql",
+      reason: combineReasons(
+        fallbackReason,
+        !hasActive
+          ? "[Login] does not expose Active; inactive login users could not be marked"
+          : undefined,
+        hasActive && hasImportStatus && !hasUserName
+          ? "[Login] does not expose UserName; tabTransactionLog-based inactivation could not run"
+          : undefined
+      ),
+    };
+  } catch (error) {
+    await transaction.rollback();
+    throw error;
+  }
+}
+
+export async function syncDistributionRulesToLegacyTable(input: {
+  records: unknown[];
+}): Promise<DistributionRuleLegacySyncResult> {
+  if (!isLocalDbMasterDataWriteEnabled()) {
+    return {
+      applied: false,
+      processedCount: 0,
+      skippedCount: input.records.length,
+      reason: "LOCAL_DB distribution rules sync is disabled",
+    };
+  }
+
+  const mappedRows = input.records
+    .map((record) => mapDistributionRuleLegacyRow(record))
+    .filter((record): record is DistributionRuleLegacyRow => record !== null);
+
+  if (mappedRows.length === 0) {
+    return {
+      applied: false,
+      processedCount: 0,
+      skippedCount: input.records.length,
+      reason: "No distribution rule rows could be mapped to the legacy tblRefDistributionRule shape",
+    };
+  }
+
+  await ensureSchema();
+  const pool = await getPool();
+
+  const procedureCheck = await pool.request().query(`
+    SELECT
+      CASE WHEN OBJECT_ID('dbo.tblRefDestributionRules_Clear_UpdateInactive', 'P') IS NULL THEN 0 ELSE 1 END AS hasClearProcedure,
+      CASE WHEN OBJECT_ID('dbo.tblRefDestributionRules_Insert', 'P') IS NULL THEN 0 ELSE 1 END AS hasInsertProcedure,
+      CASE WHEN OBJECT_ID('dbo.tblRefDestributionRules_UpdateInactive', 'P') IS NULL THEN 0 ELSE 1 END AS hasUpdateInactiveProcedure;
+  `);
+
+  const hasClearProcedure = procedureCheck.recordset?.[0]?.hasClearProcedure === 1;
+  const hasInsertProcedure = procedureCheck.recordset?.[0]?.hasInsertProcedure === 1;
+  const hasUpdateInactiveProcedure = procedureCheck.recordset?.[0]?.hasUpdateInactiveProcedure === 1;
+
+  if (hasClearProcedure && hasInsertProcedure && hasUpdateInactiveProcedure) {
+    const transaction = new sql.Transaction(pool);
+    await transaction.begin();
+
+    try {
+      await new sql.Request(transaction).execute("dbo.tblRefDestributionRules_Clear_UpdateInactive");
+
+      for (const record of mappedRows) {
+        await new sql.Request(transaction)
+          .input("OcrCode", sql.VarChar(20), record.ocrCode)
+          .input("OcrName", sql.VarChar(100), record.ocrName)
+          .input("RuleNo", sql.Int, record.ruleNo)
+          .input("Active", sql.Bit, record.active)
+          .execute("dbo.tblRefDestributionRules_Insert");
+      }
+
+      await new sql.Request(transaction).execute("dbo.tblRefDestributionRules_UpdateInactive");
+      await transaction.commit();
+
+      return {
+        applied: true,
+        processedCount: mappedRows.length,
+        skippedCount: input.records.length - mappedRows.length,
+        executionMode: "stored-procedure",
+      };
+    } catch (error) {
+      await transaction.rollback();
+      throw error;
+    }
+  }
+
+  const fallbackReason =
+    hasClearProcedure || hasInsertProcedure || hasUpdateInactiveProcedure
+      ? "Distribution rules stored procedure set was incomplete; fell back to direct SQL"
+      : undefined;
+
+  const tableCheck = await pool.request().query(`
+    SELECT CASE WHEN OBJECT_ID('dbo.tblRefDistributionRule', 'U') IS NULL THEN 0 ELSE 1 END AS hasTable;
+  `);
+
+  if (tableCheck.recordset?.[0]?.hasTable !== 1) {
+    return {
+      applied: false,
+      processedCount: 0,
+      skippedCount: input.records.length,
+      reason: "dbo.tblRefDistributionRule was not found in LOCAL_DB",
+    };
+  }
+
+  const columnsResult = await pool.request().query(`
+    SELECT [name]
+    FROM sys.columns
+    WHERE object_id = OBJECT_ID('dbo.tblRefDistributionRule', 'U');
+  `);
+
+  const availableColumns = new Set(
+    (columnsResult.recordset ?? []).map((record) => String(record.name))
+  );
+
+  const ruleKeyColumn = availableColumns.has("RuleNo")
+    ? "RuleNo"
+    : availableColumns.has("Level")
+      ? "Level"
+      : null;
+
+  if (!availableColumns.has("OcrCode") || !ruleKeyColumn) {
+    return {
+      applied: false,
+      processedCount: 0,
+      skippedCount: input.records.length,
+      reason:
+        "tblRefDistributionRule does not expose OcrCode with RuleNo/Level, so legacy distribution rule upsert cannot run",
+    };
+  }
+
+  const distributionRuleColumns = [
+    { column: "OcrCode", param: "OcrCode" },
+    { column: "OcrName", param: "OcrName" },
+    { column: ruleKeyColumn, param: "RuleNo" },
+    { column: "Status", param: "Status" },
+  ].filter((entry) => availableColumns.has(entry.column));
+
+  const hasStatus = availableColumns.has("Status");
+  const hasImportStatus = availableColumns.has("ImportStatus");
+
+  const updateParts = distributionRuleColumns
+    .filter((entry) => entry.column !== "OcrCode" && entry.column !== ruleKeyColumn)
+    .map((entry) => `[${entry.column}] = @${entry.param}`);
+
+  if (hasImportStatus) {
+    updateParts.push("[ImportStatus] = 1");
+  }
+
+  const updateAssignments =
+    updateParts.length > 0
+      ? updateParts.join(",\n              ")
+      : `[${ruleKeyColumn}] = @RuleNo`;
+
+  const insertColumns = distributionRuleColumns.map((entry) => `[${entry.column}]`);
+  const insertValues = distributionRuleColumns.map((entry) => `@${entry.param}`);
+
+  if (hasImportStatus) {
+    insertColumns.push("[ImportStatus]");
+    insertValues.push("1");
+  }
+
+  const transaction = new sql.Transaction(pool);
+  await transaction.begin();
+
+  try {
+    if (hasImportStatus) {
+      await new sql.Request(transaction).query(
+        "UPDATE dbo.tblRefDistributionRule SET ImportStatus = 0;"
+      );
+    }
+
+    for (const record of mappedRows) {
+      await new sql.Request(transaction)
+        .input("OcrCode", sql.VarChar(20), record.ocrCode)
+        .input("OcrName", sql.VarChar(100), record.ocrName)
+        .input("RuleNo", sql.Int, record.ruleNo)
+        .input("Status", sql.Bit, record.active)
+        .query(`
+          IF EXISTS (
+            SELECT 1
+            FROM dbo.tblRefDistributionRule
+            WHERE OcrCode = @OcrCode AND [${ruleKeyColumn}] = @RuleNo
+          )
+          BEGIN
+            UPDATE dbo.tblRefDistributionRule
+            SET
+              ${updateAssignments}
+            WHERE OcrCode = @OcrCode AND [${ruleKeyColumn}] = @RuleNo;
+          END
+          ELSE
+          BEGIN
+            INSERT INTO dbo.tblRefDistributionRule (
+              ${insertColumns.join(",\n              ")}
+            )
+            VALUES (
+              ${insertValues.join(",\n              ")}
+            );
+          END;
+        `);
+    }
+
+    if (hasStatus && hasImportStatus) {
+      const distributionRuleReferences = [
+        { table: "tblTransAPIssueDetails", columnPrefix: "DistRule" },
+        { table: "tblTransGLIssueDetails", columnPrefix: "DistRule" },
+        { table: "tblTransJobScheduleManager_Actuals", columnPrefix: "DistRule" },
+        { table: "tblTransSupplierInvoiceDetails", columnPrefix: "DistRule" },
+        { table: "tblTransIssueNoteDetails", columnPrefix: "DistRule" },
+      ];
+
+      for (const reference of distributionRuleReferences) {
+        for (let level = 1; level <= 5; level += 1) {
+          await new sql.Request(transaction).query(`
+            IF OBJECT_ID('dbo.${reference.table}', 'U') IS NOT NULL
+            BEGIN
+              UPDATE distributionRule
+              SET [Status] = 0
+              FROM dbo.tblRefDistributionRule distributionRule
+              WHERE distributionRule.ImportStatus = 0
+                AND distributionRule.[${ruleKeyColumn}] = ${level}
+                AND distributionRule.OcrCode IN (
+                  SELECT ${reference.columnPrefix}${level}
+                  FROM dbo.${reference.table}
+                );
+            END;
+          `);
+        }
+      }
+    }
+
+    await transaction.commit();
+
+    return {
+      applied: true,
+      processedCount: mappedRows.length,
+      skippedCount: input.records.length - mappedRows.length,
+      executionMode: "direct-sql",
+      reason: combineReasons(
+        fallbackReason,
+        !hasStatus
+          ? "tblRefDistributionRule does not expose Status; inactive rows could not be marked"
+          : undefined,
+        !hasImportStatus
+          ? "tblRefDistributionRule does not expose ImportStatus; old distribution-rule inactive logic could not run"
+          : undefined,
+        ruleKeyColumn === "Level"
+          ? "tblRefDistributionRule uses Level instead of RuleNo; fallback matched on Level"
           : undefined
       ),
     };
@@ -2175,6 +3550,1288 @@ export async function syncCustomerCurrencyToLegacyTable(input: {
       skippedCount: input.records.length - mappedRows.length,
       executionMode: "direct-sql",
       reason: fallbackReason,
+    };
+  } catch (error) {
+    await transaction.rollback();
+    throw error;
+  }
+}
+
+export async function syncProjectToLegacyTable(input: {
+  records: unknown[];
+}): Promise<ProjectLegacySyncResult> {
+  if (!isLocalDbMasterDataWriteEnabled()) {
+    return {
+      applied: false,
+      processedCount: 0,
+      skippedCount: input.records.length,
+      reason: "LOCAL_DB project sync is disabled",
+    };
+  }
+
+  const mappedRows = input.records
+    .map((record) => mapProjectLegacyRow(record))
+    .filter((record): record is ProjectLegacyRow => record !== null);
+
+  if (mappedRows.length === 0) {
+    return {
+      applied: false,
+      processedCount: 0,
+      skippedCount: input.records.length,
+      reason: "No project rows could be mapped to the legacy tblRefProject shape",
+    };
+  }
+
+  await ensureSchema();
+  const pool = await getPool();
+
+  const procedureCheck = await pool.request().query(`
+    SELECT
+      CASE WHEN OBJECT_ID('dbo.tblRefProject_Clear_UpdateInactive', 'P') IS NULL THEN 0 ELSE 1 END AS hasClearProcedure,
+      CASE WHEN OBJECT_ID('dbo.tblRefProject_Insert', 'P') IS NULL THEN 0 ELSE 1 END AS hasInsertProcedure,
+      CASE WHEN OBJECT_ID('dbo.tblRefProject_UpdateInactive', 'P') IS NULL THEN 0 ELSE 1 END AS hasUpdateInactiveProcedure;
+  `);
+
+  const hasClearProcedure = procedureCheck.recordset?.[0]?.hasClearProcedure === 1;
+  const hasInsertProcedure = procedureCheck.recordset?.[0]?.hasInsertProcedure === 1;
+  const hasUpdateInactiveProcedure = procedureCheck.recordset?.[0]?.hasUpdateInactiveProcedure === 1;
+
+  if (hasClearProcedure && hasInsertProcedure && hasUpdateInactiveProcedure) {
+    const transaction = new sql.Transaction(pool);
+    await transaction.begin();
+
+    try {
+      await new sql.Request(transaction).execute("dbo.tblRefProject_Clear_UpdateInactive");
+
+      for (const record of mappedRows) {
+        await new sql.Request(transaction)
+          .input("ProjectCode", sql.VarChar(20), record.projectCode)
+          .input("ProjectName", sql.VarChar(200), record.projectName)
+          .input("ActiveProject", sql.Bit, record.activeProject)
+          .execute("dbo.tblRefProject_Insert");
+      }
+
+      await new sql.Request(transaction).execute("dbo.tblRefProject_UpdateInactive");
+      await transaction.commit();
+
+      return {
+        applied: true,
+        processedCount: mappedRows.length,
+        skippedCount: input.records.length - mappedRows.length,
+        executionMode: "stored-procedure",
+      };
+    } catch (error) {
+      await transaction.rollback();
+      throw error;
+    }
+  }
+
+  const fallbackReason =
+    hasClearProcedure || hasInsertProcedure || hasUpdateInactiveProcedure
+      ? "Project stored procedure set was incomplete; fell back to direct SQL"
+      : undefined;
+
+  const tableCheck = await pool.request().query(`
+    SELECT CASE WHEN OBJECT_ID('dbo.tblRefProject', 'U') IS NULL THEN 0 ELSE 1 END AS hasTable;
+  `);
+
+  if (tableCheck.recordset?.[0]?.hasTable !== 1) {
+    return {
+      applied: false,
+      processedCount: 0,
+      skippedCount: input.records.length,
+      reason: "dbo.tblRefProject was not found in LOCAL_DB",
+    };
+  }
+
+  const columnsResult = await pool.request().query(`
+    SELECT [name]
+    FROM sys.columns
+    WHERE object_id = OBJECT_ID('dbo.tblRefProject', 'U');
+  `);
+
+  const availableColumns = new Set(
+    (columnsResult.recordset ?? []).map((record) => String(record.name))
+  );
+
+  const hasActiveProject = availableColumns.has("ActiveProject");
+  const hasImportStatus = availableColumns.has("ImportStatus");
+
+  const transaction = new sql.Transaction(pool);
+  await transaction.begin();
+
+  try {
+    if (hasImportStatus) {
+      await new sql.Request(transaction).query("UPDATE dbo.tblRefProject SET ImportStatus = 0;");
+    }
+
+    for (const record of mappedRows) {
+      await new sql.Request(transaction)
+        .input("ProjectCode", sql.VarChar(20), record.projectCode)
+        .input("ProjectName", sql.VarChar(200), record.projectName)
+        .input("ActiveProject", sql.Bit, record.activeProject)
+        .query(`
+          IF EXISTS (SELECT 1 FROM dbo.tblRefProject WHERE ProjectCode = @ProjectCode)
+          BEGIN
+            UPDATE dbo.tblRefProject
+            SET
+              ProjectName = @ProjectName${hasActiveProject ? ", ActiveProject = @ActiveProject" : ""}${hasImportStatus ? ", ImportStatus = 1" : ""}
+            WHERE ProjectCode = @ProjectCode;
+          END
+          ELSE
+          BEGIN
+            INSERT INTO dbo.tblRefProject (
+              ProjectCode,
+              ProjectName${hasActiveProject ? ", ActiveProject" : ""}${hasImportStatus ? ", ImportStatus" : ""}
+            )
+            VALUES (
+              @ProjectCode,
+              @ProjectName${hasActiveProject ? ", @ActiveProject" : ""}${hasImportStatus ? ", 1" : ""}
+            );
+          END;
+        `);
+    }
+
+    if (hasImportStatus && hasActiveProject) {
+      await new sql.Request(transaction).query(`
+        UPDATE dbo.tblRefProject
+        SET ActiveProject = 0
+        WHERE ImportStatus = 0;
+      `);
+    }
+
+    await transaction.commit();
+
+    return {
+      applied: true,
+      processedCount: mappedRows.length,
+      skippedCount: input.records.length - mappedRows.length,
+      executionMode: "direct-sql",
+      reason: combineReasons(
+        fallbackReason,
+        !hasActiveProject
+          ? "tblRefProject does not expose ActiveProject; inactive rows could not be marked"
+          : undefined,
+        !hasImportStatus
+          ? "tblRefProject does not expose ImportStatus; old project inactive logic could not run"
+          : undefined
+      ),
+    };
+  } catch (error) {
+    await transaction.rollback();
+    throw error;
+  }
+}
+
+export async function syncPriceListToLegacyTable(input: {
+  records: unknown[];
+}): Promise<PriceListLegacySyncResult> {
+  if (!isLocalDbMasterDataWriteEnabled()) {
+    return {
+      applied: false,
+      processedCount: 0,
+      skippedCount: input.records.length,
+      reason: "LOCAL_DB price-list sync is disabled",
+    };
+  }
+
+  const mappedRows = input.records.flatMap((record) => mapPriceListLegacyRows(record));
+
+  if (mappedRows.length === 0) {
+    return {
+      applied: false,
+      processedCount: 0,
+      skippedCount: input.records.length,
+      reason: "No price-list rows could be mapped to the legacy tblRefPriceListPrices shape",
+    };
+  }
+
+  await ensureSchema();
+  const pool = await getPool();
+
+  const procedureCheck = await pool.request().query(`
+    SELECT CASE WHEN OBJECT_ID('dbo.tblRefPriceListPrices_insert', 'P') IS NULL THEN 0 ELSE 1 END AS hasInsertProcedure;
+  `);
+
+  const hasInsertProcedure = procedureCheck.recordset?.[0]?.hasInsertProcedure === 1;
+
+  if (hasInsertProcedure) {
+    const transaction = new sql.Transaction(pool);
+    await transaction.begin();
+
+    try {
+      for (const record of mappedRows) {
+        await new sql.Request(transaction)
+          .input("ItemCode", sql.VarChar(100), record.itemCode)
+          .input("Price", sql.Float, record.unitPrice)
+          .input("ListName", sql.VarChar(100), record.priceListCode)
+          .input("ProjectCode", sql.VarChar(20), record.listName)
+          .execute("dbo.tblRefPriceListPrices_insert");
+      }
+
+      await transaction.commit();
+
+      return {
+        applied: true,
+        processedCount: mappedRows.length,
+        skippedCount: Math.max(0, input.records.length - mappedRows.length),
+        executionMode: "stored-procedure",
+      };
+    } catch (error) {
+      await transaction.rollback();
+      throw error;
+    }
+  }
+
+  const tableCheck = await pool.request().query(`
+    SELECT CASE WHEN OBJECT_ID('dbo.tblRefPriceListPrices', 'U') IS NULL THEN 0 ELSE 1 END AS hasTable;
+  `);
+
+  if (tableCheck.recordset?.[0]?.hasTable !== 1) {
+    return {
+      applied: false,
+      processedCount: 0,
+      skippedCount: input.records.length,
+      reason: "dbo.tblRefPriceListPrices was not found in LOCAL_DB",
+    };
+  }
+
+  const transaction = new sql.Transaction(pool);
+  await transaction.begin();
+
+  try {
+    for (const record of mappedRows) {
+      await new sql.Request(transaction)
+        .input("ItemCode", sql.VarChar(100), record.itemCode)
+        .input("Price", sql.Float, record.unitPrice)
+        .input("PriceListCode", sql.VarChar(100), record.priceListCode)
+        .input("ListName", sql.VarChar(100), record.listName)
+        .query(`
+          DECLARE @StockLink INT;
+          SELECT @StockLink = stocklink FROM dbo.tblRefItem WHERE ItemCode = @ItemCode;
+
+          IF @StockLink IS NOT NULL
+          BEGIN
+            IF EXISTS (
+              SELECT 1
+              FROM dbo.tblRefPriceListPrices
+              WHERE iStockID = @StockLink
+                AND PLName = @ListName
+                AND iPriceListNameID = @PriceListCode
+            )
+            BEGIN
+              UPDATE dbo.tblRefPriceListPrices
+              SET fExclPrice = @Price
+              WHERE iStockID = @StockLink
+                AND PLName = @ListName
+                AND iPriceListNameID = @PriceListCode;
+            END
+            ELSE
+            BEGIN
+              INSERT INTO dbo.tblRefPriceListPrices (ItemCode, fExclPrice, PLName, iStockID, iPriceListNameID)
+              VALUES (@ItemCode, @Price, @ListName, @StockLink, @PriceListCode);
+            END
+          END;
+        `);
+    }
+
+    await transaction.commit();
+
+    return {
+      applied: true,
+      processedCount: mappedRows.length,
+      skippedCount: Math.max(0, input.records.length - mappedRows.length),
+      executionMode: "direct-sql",
+      reason: "tblRefPriceListPrices_insert was not found; fell back to direct SQL",
+    };
+  } catch (error) {
+    await transaction.rollback();
+    throw error;
+  }
+}
+
+export async function syncItemToLegacyTable(input: {
+  records: unknown[];
+}): Promise<ItemLegacySyncResult> {
+  if (!isLocalDbMasterDataWriteEnabled()) {
+    return {
+      applied: false,
+      processedCount: 0,
+      skippedCount: input.records.length,
+      reason: "LOCAL_DB item sync is disabled",
+    };
+  }
+
+  const mappedRows = input.records
+    .map((record) => mapItemLegacyRow(record))
+    .filter((record): record is ItemLegacyRow => record !== null);
+
+  if (mappedRows.length === 0) {
+    return {
+      applied: false,
+      processedCount: 0,
+      skippedCount: input.records.length,
+      reason: "No item rows could be mapped to the legacy tblRefItem shape",
+    };
+  }
+
+  await ensureSchema();
+  const pool = await getPool();
+
+  const procedureCheck = await pool.request().query(`
+    SELECT
+      CASE WHEN OBJECT_ID('dbo.tblRefItem_Clear_UpdateInactive', 'P') IS NULL THEN 0 ELSE 1 END AS hasClearProcedure,
+      CASE WHEN OBJECT_ID('dbo.tblRefItem_Insert', 'P') IS NULL THEN 0 ELSE 1 END AS hasInsertProcedure,
+      CASE WHEN OBJECT_ID('dbo.tblRefItem_UpdateInactive', 'P') IS NULL THEN 0 ELSE 1 END AS hasUpdateInactiveProcedure;
+  `);
+
+  const hasClearProcedure = procedureCheck.recordset?.[0]?.hasClearProcedure === 1;
+  const hasInsertProcedure = procedureCheck.recordset?.[0]?.hasInsertProcedure === 1;
+  const hasUpdateInactiveProcedure = procedureCheck.recordset?.[0]?.hasUpdateInactiveProcedure === 1;
+
+  if (hasClearProcedure && hasInsertProcedure && hasUpdateInactiveProcedure) {
+    const transaction = new sql.Transaction(pool);
+    await transaction.begin();
+
+    try {
+      await new sql.Request(transaction).execute("dbo.tblRefItem_Clear_UpdateInactive");
+
+      for (const record of mappedRows) {
+        await new sql.Request(transaction)
+          .input("ItemCode", sql.VarChar(400), record.itemCode)
+          .input("ItemClass", sql.VarChar(500), record.itemClass)
+          .input("ItemDesc", sql.VarChar(500), record.itemDesc)
+          .input("IsChargable", sql.Bit, record.isChargable)
+          .input("idUnits", sql.Int, record.idUnits)
+          .input("Date", sql.DateTime, record.date)
+          .input("Status", sql.Bit, record.status)
+          .input("QtyOnHand", sql.Numeric(18, 2), record.qtyOnHand)
+          .input("QtyOnOrder", sql.Numeric(18, 2), record.qtyOnOrder)
+          .input("QtyOnAvailable", sql.Numeric(18, 2), record.qtyOnAvailable)
+          .input("LastUnitCost", sql.Numeric(18, 2), record.lastUnitCost)
+          .input("ModelNo", sql.VarChar(500), record.modelNo)
+          .input("GroupCode", sql.VarChar(500), record.groupCode)
+          .input("IsServiceItem", sql.Bit, record.isServiceItem)
+          .input("PackCode", sql.VarChar(500), record.packCode)
+          .input("IsSerial", sql.Bit, record.isSerial)
+          .input("UDF3", sql.VarChar(100), record.udf3)
+          .input("UDF5", sql.VarChar(100), record.udf5)
+          .input("Rate", sql.Numeric(18, 2), record.rate)
+          .execute("dbo.tblRefItem_Insert");
+      }
+
+      await new sql.Request(transaction).execute("dbo.tblRefItem_UpdateInactive");
+      await transaction.commit();
+
+      return {
+        applied: true,
+        processedCount: mappedRows.length,
+        skippedCount: input.records.length - mappedRows.length,
+        executionMode: "stored-procedure",
+      };
+    } catch (error) {
+      await transaction.rollback();
+      throw error;
+    }
+  }
+
+  const fallbackReason =
+    hasClearProcedure || hasInsertProcedure || hasUpdateInactiveProcedure
+      ? "Item stored procedure set was incomplete; fell back to direct SQL"
+      : undefined;
+
+  const tableCheck = await pool.request().query(`
+    SELECT CASE WHEN OBJECT_ID('dbo.tblRefItem', 'U') IS NULL THEN 0 ELSE 1 END AS hasTable;
+  `);
+
+  if (tableCheck.recordset?.[0]?.hasTable !== 1) {
+    return {
+      applied: false,
+      processedCount: 0,
+      skippedCount: input.records.length,
+      reason: "dbo.tblRefItem was not found in LOCAL_DB",
+    };
+  }
+
+  const columnsResult = await pool.request().query(`
+    SELECT [name]
+    FROM sys.columns
+    WHERE object_id = OBJECT_ID('dbo.tblRefItem', 'U');
+  `);
+
+  const availableColumns = new Set(
+    (columnsResult.recordset ?? []).map((record) => String(record.name))
+  );
+
+  const hasImportStatus = availableColumns.has("ImportStatus");
+  const hasStatus = availableColumns.has("Status");
+
+  const transaction = new sql.Transaction(pool);
+  await transaction.begin();
+
+  try {
+    if (hasImportStatus) {
+      await new sql.Request(transaction).query("UPDATE dbo.tblRefItem SET ImportStatus = 0;");
+    }
+
+    for (const record of mappedRows) {
+      await new sql.Request(transaction)
+        .input("ItemCode", sql.VarChar(400), record.itemCode)
+        .input("ItemClass", sql.VarChar(500), record.itemClass)
+        .input("ItemDesc", sql.VarChar(500), record.itemDesc)
+        .input("idUnits", sql.Int, record.idUnits)
+        .input("Date", sql.DateTime, record.date)
+        .input("Status", sql.Bit, record.status)
+        .input("QtyOnHand", sql.Numeric(18, 2), record.qtyOnHand)
+        .input("QtyOnOrder", sql.Numeric(18, 2), record.qtyOnOrder)
+        .input("QtyOnAvailable", sql.Numeric(18, 2), record.qtyOnAvailable)
+        .input("LastUnitCost", sql.Numeric(18, 2), record.lastUnitCost)
+        .input("ModelNo", sql.VarChar(500), record.modelNo)
+        .input("GroupCode", sql.VarChar(500), record.groupCode)
+        .input("IsServiceItem", sql.Bit, record.isServiceItem)
+        .input("IsSerial", sql.Bit, record.isSerial)
+        .input("UDF3", sql.VarChar(100), record.udf3)
+        .input("UDF5", sql.VarChar(100), record.udf5)
+        .input("Rate", sql.Numeric(18, 2), record.rate)
+        .query(`
+          IF EXISTS (SELECT 1 FROM dbo.tblRefItem WHERE ItemCode = @ItemCode)
+          BEGIN
+            UPDATE dbo.tblRefItem
+            SET
+              ItemClass = @ItemClass,
+              ItemDesc = @ItemDesc,
+              idUnits = @idUnits,
+              [Date] = @Date${hasStatus ? ", [Status] = @Status" : ""},
+              QtyOnHand = @QtyOnHand,
+              QtyOnOrder = @QtyOnOrder,
+              QtyOnAvailable = @QtyOnAvailable,
+              LastUnitCost = @LastUnitCost,
+              ModelNo = @ModelNo,
+              GroupCode = @GroupCode,
+              IsServiceItem = @IsServiceItem,
+              IsSerial = @IsSerial,
+              UDF3 = @UDF3,
+              UDF5 = @UDF5,
+              Rate = @Rate${hasImportStatus ? ", ImportStatus = 1" : ""}
+            WHERE ItemCode = @ItemCode;
+          END
+          ELSE
+          BEGIN
+            INSERT INTO dbo.tblRefItem (
+              ItemCode,
+              ItemClass,
+              ItemDesc,
+              idUnits,
+              [Date],
+              QtyOnHand,
+              QtyOnOrder,
+              QtyOnAvailable,
+              LastUnitCost,
+              ModelNo,
+              GroupCode,
+              IsServiceItem,
+              IsSerial,
+              UDF3,
+              UDF5,
+              Rate${hasStatus ? ", [Status]" : ""}${hasImportStatus ? ", ImportStatus" : ""}
+            )
+            VALUES (
+              @ItemCode,
+              @ItemClass,
+              @ItemDesc,
+              @idUnits,
+              @Date,
+              @QtyOnHand,
+              @QtyOnOrder,
+              @QtyOnAvailable,
+              @LastUnitCost,
+              @ModelNo,
+              @GroupCode,
+              @IsServiceItem,
+              @IsSerial,
+              @UDF3,
+              @UDF5,
+              @Rate${hasStatus ? ", @Status" : ""}${hasImportStatus ? ", 1" : ""}
+            );
+          END;
+        `);
+    }
+
+    if (hasStatus && hasImportStatus) {
+      await new sql.Request(transaction).batch(`
+        IF OBJECT_ID('dbo.tblTransEstimateDetail', 'U') IS NOT NULL
+        BEGIN
+          UPDATE dbo.tblRefItem
+          SET [Status] = 0
+          WHERE StockLink IN (SELECT StkLink FROM dbo.tblTransEstimateDetail)
+            AND ImportStatus = 0;
+        END;
+
+        IF OBJECT_ID('dbo.tblTransBOMDetail', 'U') IS NOT NULL
+        BEGIN
+          UPDATE dbo.tblRefItem
+          SET [Status] = 0
+          WHERE StockLink IN (SELECT StkLink FROM dbo.tblTransBOMDetail)
+            AND ImportStatus = 0;
+        END;
+
+        IF OBJECT_ID('dbo.tblTransCreditNoteItemDetails', 'U') IS NOT NULL
+        BEGIN
+          UPDATE dbo.tblRefItem
+          SET [Status] = 0
+          WHERE StockLink IN (SELECT StockLink FROM dbo.tblTransCreditNoteItemDetails)
+            AND ImportStatus = 0;
+        END;
+
+        IF OBJECT_ID('dbo.tblTransInvoiceItemDetails', 'U') IS NOT NULL
+        BEGIN
+          UPDATE dbo.tblRefItem
+          SET [Status] = 0
+          WHERE StockLink IN (SELECT StockLink FROM dbo.tblTransInvoiceItemDetails)
+            AND ImportStatus = 0;
+        END;
+
+        IF OBJECT_ID('dbo.tblTransIssueNoteDetails', 'U') IS NOT NULL
+        BEGIN
+          UPDATE dbo.tblRefItem
+          SET [Status] = 0
+          WHERE StockLink IN (SELECT StockLink FROM dbo.tblTransIssueNoteDetails)
+            AND ImportStatus = 0;
+        END;
+
+        IF OBJECT_ID('dbo.tblTransRequestNoteDetails', 'U') IS NOT NULL
+        BEGIN
+          UPDATE dbo.tblRefItem
+          SET [Status] = 0
+          WHERE StockLink IN (SELECT StockLink FROM dbo.tblTransRequestNoteDetails)
+            AND ImportStatus = 0;
+        END;
+
+        DELETE FROM dbo.tblRefItem
+        WHERE ImportStatus = 0 AND ISNULL([Status], 0) = 0;
+      `);
+    }
+
+    await transaction.commit();
+
+    return {
+      applied: true,
+      processedCount: mappedRows.length,
+      skippedCount: input.records.length - mappedRows.length,
+      executionMode: "direct-sql",
+      reason: combineReasons(
+        fallbackReason,
+        !hasStatus
+          ? "tblRefItem does not expose Status; inactive rows could not be marked"
+          : undefined,
+        !hasImportStatus
+          ? "tblRefItem does not expose ImportStatus; old item inactive logic could not run"
+          : undefined
+      ),
+    };
+  } catch (error) {
+    await transaction.rollback();
+    throw error;
+  }
+}
+
+export async function syncUomGroupToLegacyTable(input: {
+  records: unknown[];
+}): Promise<UomGroupLegacySyncResult> {
+  if (!isLocalDbMasterDataWriteEnabled()) {
+    return {
+      applied: false,
+      processedCount: 0,
+      skippedCount: input.records.length,
+      reason: "LOCAL_DB uom-group sync is disabled",
+    };
+  }
+
+  const mappedRows = input.records
+    .map((record) => mapUomGroupLegacyRow(record))
+    .filter((record): record is UomGroupLegacyRow => record !== null);
+
+  if (mappedRows.length === 0) {
+    return {
+      applied: false,
+      processedCount: 0,
+      skippedCount: input.records.length,
+      reason: "No uom-group rows could be mapped to the legacy tblRefUOMGroup shape",
+    };
+  }
+
+  await ensureSchema();
+  const pool = await getPool();
+
+  const procedureCheck = await pool.request().query(`
+    SELECT
+      CASE WHEN OBJECT_ID('dbo.tblRefUOMGroup_Delete', 'P') IS NULL THEN 0 ELSE 1 END AS hasDeleteProcedure,
+      CASE WHEN OBJECT_ID('dbo.tblRefUOMGroup_Insert', 'P') IS NULL THEN 0 ELSE 1 END AS hasInsertProcedure;
+  `);
+
+  const hasDeleteProcedure = procedureCheck.recordset?.[0]?.hasDeleteProcedure === 1;
+  const hasInsertProcedure = procedureCheck.recordset?.[0]?.hasInsertProcedure === 1;
+
+  if (hasDeleteProcedure && hasInsertProcedure) {
+    const transaction = new sql.Transaction(pool);
+    await transaction.begin();
+
+    try {
+      await new sql.Request(transaction).execute("dbo.tblRefUOMGroup_Delete");
+
+      for (const record of mappedRows) {
+        await new sql.Request(transaction)
+          .input("UgpEntry", sql.Int, record.ugpEntry)
+          .input("UgpCode", sql.VarChar(50), record.ugpCode)
+          .input("UgpName", sql.VarChar(50), record.ugpName)
+          .input("BaseUom", sql.Int, record.baseUom)
+          .execute("dbo.tblRefUOMGroup_Insert");
+      }
+
+      await transaction.commit();
+
+      return {
+        applied: true,
+        processedCount: mappedRows.length,
+        skippedCount: input.records.length - mappedRows.length,
+        executionMode: "stored-procedure",
+      };
+    } catch (error) {
+      await transaction.rollback();
+      throw error;
+    }
+  }
+
+  const tableCheck = await pool.request().query(`
+    SELECT CASE WHEN OBJECT_ID('dbo.tblRefUOMGroup', 'U') IS NULL THEN 0 ELSE 1 END AS hasTable;
+  `);
+
+  if (tableCheck.recordset?.[0]?.hasTable !== 1) {
+    return {
+      applied: false,
+      processedCount: 0,
+      skippedCount: input.records.length,
+      reason: "dbo.tblRefUOMGroup was not found in LOCAL_DB",
+    };
+  }
+
+  const transaction = new sql.Transaction(pool);
+  await transaction.begin();
+
+  try {
+    await new sql.Request(transaction).query("DELETE FROM dbo.tblRefUOMGroup;");
+
+    for (const record of mappedRows) {
+      await new sql.Request(transaction)
+        .input("UgpEntry", sql.Int, record.ugpEntry)
+        .input("UgpCode", sql.VarChar(50), record.ugpCode)
+        .input("UgpName", sql.VarChar(50), record.ugpName)
+        .input("BaseUom", sql.Int, record.baseUom)
+        .query(`
+          INSERT INTO dbo.tblRefUOMGroup (UgpEntry, UgpCode, UgpName, BaseUom)
+          VALUES (@UgpEntry, @UgpCode, @UgpName, @BaseUom);
+        `);
+    }
+
+    await transaction.commit();
+
+    return {
+      applied: true,
+      processedCount: mappedRows.length,
+      skippedCount: input.records.length - mappedRows.length,
+      executionMode: "direct-sql",
+      reason:
+        "tblRefUOMGroup_Delete/tblRefUOMGroup_Insert were not both found; fell back to direct SQL",
+    };
+  } catch (error) {
+    await transaction.rollback();
+    throw error;
+  }
+}
+
+export async function syncUomConversionToLegacyTable(input: {
+  records: unknown[];
+}): Promise<UomConversionLegacySyncResult> {
+  if (!isLocalDbMasterDataWriteEnabled()) {
+    return {
+      applied: false,
+      processedCount: 0,
+      skippedCount: input.records.length,
+      reason: "LOCAL_DB uom-conversion sync is disabled",
+    };
+  }
+
+  const mapped = mapUomConversionLegacyRows(input.records);
+  const conversions = mapped.conversions.filter(
+    (entry): entry is UomConversionLegacyRow => entry.baseUom !== null
+  );
+  const formulas = mapped.formulas;
+
+  if (conversions.length === 0 && formulas.length === 0) {
+    return {
+      applied: false,
+      processedCount: 0,
+      skippedCount: input.records.length,
+      reason: "No uom-conversion rows could be mapped to the legacy conversion/formula shapes",
+    };
+  }
+
+  await ensureSchema();
+  const pool = await getPool();
+
+  const procedureCheck = await pool.request().query(`
+    SELECT
+      CASE WHEN OBJECT_ID('dbo.tblRefUOMConverstion_Delete', 'P') IS NULL THEN 0 ELSE 1 END AS hasConversionDeleteProcedure,
+      CASE WHEN OBJECT_ID('dbo.tblRefUOMConverstion_Insert', 'P') IS NULL THEN 0 ELSE 1 END AS hasConversionInsertProcedure,
+      CASE WHEN OBJECT_ID('dbo.tblRefUOMFormula_Delete', 'P') IS NULL THEN 0 ELSE 1 END AS hasFormulaDeleteProcedure,
+      CASE WHEN OBJECT_ID('dbo.tblRefUOMFormula_Insert', 'P') IS NULL THEN 0 ELSE 1 END AS hasFormulaInsertProcedure;
+  `);
+
+  const hasConversionDeleteProcedure =
+    procedureCheck.recordset?.[0]?.hasConversionDeleteProcedure === 1;
+  const hasConversionInsertProcedure =
+    procedureCheck.recordset?.[0]?.hasConversionInsertProcedure === 1;
+  const hasFormulaDeleteProcedure = procedureCheck.recordset?.[0]?.hasFormulaDeleteProcedure === 1;
+  const hasFormulaInsertProcedure = procedureCheck.recordset?.[0]?.hasFormulaInsertProcedure === 1;
+
+  if (
+    hasConversionDeleteProcedure &&
+    hasConversionInsertProcedure &&
+    hasFormulaDeleteProcedure &&
+    hasFormulaInsertProcedure
+  ) {
+    const transaction = new sql.Transaction(pool);
+    await transaction.begin();
+
+    try {
+      await new sql.Request(transaction).execute("dbo.tblRefUOMConverstion_Delete");
+
+      for (const record of conversions) {
+        await new sql.Request(transaction)
+          .input("BaseQty", sql.Float, record.baseQty)
+          .input("UomEntry", sql.Int, record.uomEntry)
+          .input("UgpCode", sql.VarChar(100), record.ugpCode)
+          .input("UgpName", sql.VarChar(500), record.ugpName)
+          .input("UomCode", sql.VarChar(100), record.uomCode)
+          .input("UomName", sql.VarChar(500), record.uomName)
+          .input("BaseUom", sql.Int, record.baseUom ?? 0)
+          .execute("dbo.tblRefUOMConverstion_Insert");
+      }
+
+      await new sql.Request(transaction).execute("dbo.tblRefUOMFormula_Delete");
+
+      for (const record of formulas) {
+        await new sql.Request(transaction)
+          .input("UgpEntry", sql.Int, record.ugpEntry)
+          .input("BaseQty", sql.Float, record.baseQty)
+          .input("UomEntry", sql.Int, record.uomEntry)
+          .input("AltQty", sql.Float, record.altQty)
+          .execute("dbo.tblRefUOMFormula_Insert");
+      }
+
+      await transaction.commit();
+
+      return {
+        applied: true,
+        processedCount: conversions.length,
+        skippedCount: Math.max(0, input.records.length - conversions.length),
+        executionMode: "stored-procedure",
+      };
+    } catch (error) {
+      await transaction.rollback();
+      throw error;
+    }
+  }
+
+  const transaction = new sql.Transaction(pool);
+  await transaction.begin();
+
+  try {
+    await new sql.Request(transaction).batch(`
+      IF OBJECT_ID('dbo.tblRefUOMConverstion', 'U') IS NOT NULL
+      BEGIN
+        DELETE FROM dbo.tblRefUOMConverstion;
+      END;
+
+      IF OBJECT_ID('dbo.tblRefUOMFormula', 'U') IS NOT NULL
+      BEGIN
+        DELETE FROM dbo.tblRefUOMFormula;
+      END;
+    `);
+
+    for (const record of conversions) {
+      await new sql.Request(transaction)
+        .input("BaseQty", sql.Float, record.baseQty)
+        .input("UomEntry", sql.Int, record.uomEntry)
+        .input("UgpCode", sql.VarChar(100), record.ugpCode)
+        .input("UgpName", sql.VarChar(500), record.ugpName)
+        .input("UomCode", sql.VarChar(100), record.uomCode)
+        .input("UomName", sql.VarChar(500), record.uomName)
+        .input("BaseUom", sql.Int, record.baseUom ?? 0)
+        .query(`
+          IF OBJECT_ID('dbo.tblRefUOMConverstion', 'U') IS NOT NULL AND @BaseUom IS NOT NULL
+          BEGIN
+            INSERT INTO dbo.tblRefUOMConverstion (BaseQty, UomEntry, UgpCode, UgpName, UomCode, UomName, BaseUom)
+            VALUES (@BaseQty, @UomEntry, @UgpCode, @UgpName, @UomCode, @UomName, @BaseUom);
+          END;
+        `);
+    }
+
+    for (const record of formulas) {
+      await new sql.Request(transaction)
+        .input("UgpEntry", sql.Int, record.ugpEntry)
+        .input("BaseQty", sql.Float, record.baseQty)
+        .input("UomEntry", sql.Int, record.uomEntry)
+        .input("AltQty", sql.Float, record.altQty)
+        .query(`
+          IF OBJECT_ID('dbo.tblRefUOMFormula', 'U') IS NOT NULL
+          BEGIN
+            INSERT INTO dbo.tblRefUOMFormula (UgpEntry, BaseQty, UomEntry, AltQty)
+            VALUES (@UgpEntry, @BaseQty, @UomEntry, @AltQty);
+          END;
+        `);
+    }
+
+    await transaction.commit();
+
+    return {
+      applied: true,
+      processedCount: conversions.length,
+      skippedCount: Math.max(0, input.records.length - conversions.length),
+      executionMode: "direct-sql",
+      reason:
+        "UOM conversion/formula stored procedure set was incomplete; fell back to direct SQL",
+    };
+  } catch (error) {
+    await transaction.rollback();
+    throw error;
+  }
+}
+
+export async function syncBankToLegacyTable(input: {
+  records: unknown[];
+}): Promise<BankLegacySyncResult> {
+  if (!isLocalDbMasterDataWriteEnabled()) {
+    return {
+      applied: false,
+      processedCount: 0,
+      skippedCount: input.records.length,
+      reason: "LOCAL_DB bank sync is disabled",
+    };
+  }
+
+  const mappedRows = input.records
+    .map((record) => mapBankLegacyRow(record))
+    .filter((record): record is BankLegacyRow => record !== null);
+
+  if (mappedRows.length === 0) {
+    return {
+      applied: false,
+      processedCount: 0,
+      skippedCount: input.records.length,
+      reason: "No bank rows could be mapped to the legacy bank-branch shape",
+    };
+  }
+
+  await ensureSchema();
+  const pool = await getPool();
+
+  const procedureCheck = await pool.request().query(`
+    SELECT
+      CASE WHEN OBJECT_ID('dbo.tblRefBank_Clear_UpdateInactive', 'P') IS NULL THEN 0 ELSE 1 END AS hasClearProcedure,
+      CASE WHEN OBJECT_ID('dbo.tblRefBank_Insert', 'P') IS NULL THEN 0 ELSE 1 END AS hasInsertProcedure,
+      CASE WHEN OBJECT_ID('dbo.tblRefBank_Insert_UpdateInactive', 'P') IS NULL THEN 0 ELSE 1 END AS hasUpdateInactiveProcedure;
+  `);
+
+  const hasClearProcedure = procedureCheck.recordset?.[0]?.hasClearProcedure === 1;
+  const hasInsertProcedure = procedureCheck.recordset?.[0]?.hasInsertProcedure === 1;
+  const hasUpdateInactiveProcedure = procedureCheck.recordset?.[0]?.hasUpdateInactiveProcedure === 1;
+
+  if (hasClearProcedure && hasInsertProcedure && hasUpdateInactiveProcedure) {
+    const transaction = new sql.Transaction(pool);
+    await transaction.begin();
+
+    try {
+      await new sql.Request(transaction).execute("dbo.tblRefBank_Clear_UpdateInactive");
+
+      for (const record of mappedRows) {
+        await new sql.Request(transaction)
+          .input("BankCode", sql.VarChar(50), record.bankCode)
+          .input("BranchCode", sql.VarChar(50), record.branchCode)
+          .input("BranchName", sql.VarChar(500), record.branchName)
+          .input("Active", sql.Bit, record.active)
+          .execute("dbo.tblRefBank_Insert");
+      }
+
+      await new sql.Request(transaction).execute("dbo.tblRefBank_Insert_UpdateInactive");
+      await transaction.commit();
+
+      return {
+        applied: true,
+        processedCount: mappedRows.length,
+        skippedCount: input.records.length - mappedRows.length,
+        executionMode: "stored-procedure",
+      };
+    } catch (error) {
+      await transaction.rollback();
+      throw error;
+    }
+  }
+
+  const tableCheck = await pool.request().query(`
+    SELECT CASE WHEN OBJECT_ID('dbo.tblRefBankBranches', 'U') IS NULL THEN 0 ELSE 1 END AS hasTable;
+  `);
+
+  if (tableCheck.recordset?.[0]?.hasTable !== 1) {
+    return {
+      applied: false,
+      processedCount: 0,
+      skippedCount: input.records.length,
+      reason: "dbo.tblRefBankBranches was not found in LOCAL_DB",
+    };
+  }
+
+  const columnsResult = await pool.request().query(`
+    SELECT [name]
+    FROM sys.columns
+    WHERE object_id = OBJECT_ID('dbo.tblRefBankBranches', 'U');
+  `);
+
+  const availableColumns = new Set(
+    (columnsResult.recordset ?? []).map((record) => String(record.name))
+  );
+  const hasImportStatus = availableColumns.has("ImportStatus");
+
+  const transaction = new sql.Transaction(pool);
+  await transaction.begin();
+
+  try {
+    if (hasImportStatus) {
+      await new sql.Request(transaction).query(
+        "UPDATE dbo.tblRefBankBranches SET ImportStatus = 0;"
+      );
+    }
+
+    for (const record of mappedRows) {
+      await new sql.Request(transaction)
+        .input("BankCode", sql.VarChar(50), record.bankCode)
+        .input("BranchCode", sql.VarChar(50), record.branchCode)
+        .input("BranchName", sql.VarChar(500), record.branchName)
+        .input("Active", sql.Bit, record.active)
+        .query(`
+          IF EXISTS (
+            SELECT 1 FROM dbo.tblRefBankBranches WHERE BankCode = @BankCode AND BranchCode = @BranchCode
+          )
+          BEGIN
+            UPDATE dbo.tblRefBankBranches
+            SET
+              BranchName = @BranchName,
+              Active = @Active${hasImportStatus ? ", ImportStatus = 1" : ""}
+            WHERE BankCode = @BankCode AND BranchCode = @BranchCode;
+          END
+          ELSE
+          BEGIN
+            INSERT INTO dbo.tblRefBankBranches (
+              BankCode,
+              BranchCode,
+              BranchName,
+              Active${hasImportStatus ? ", ImportStatus" : ""}
+            )
+            VALUES (
+              @BankCode,
+              @BranchCode,
+              @BranchName,
+              @Active${hasImportStatus ? ", 1" : ""}
+            );
+          END;
+        `);
+    }
+
+    await transaction.commit();
+
+    return {
+      applied: true,
+      processedCount: mappedRows.length,
+      skippedCount: input.records.length - mappedRows.length,
+      executionMode: "direct-sql",
+      reason:
+        "tblRefBank_Clear_UpdateInactive/tblRefBank_Insert/tblRefBank_Insert_UpdateInactive were not all found; fell back to direct SQL",
+    };
+  } catch (error) {
+    await transaction.rollback();
+    throw error;
+  }
+}
+
+export async function syncBranchToLegacyTable(input: {
+  records: unknown[];
+}): Promise<BranchLegacySyncResult> {
+  if (!isLocalDbMasterDataWriteEnabled()) {
+    return {
+      applied: false,
+      processedCount: 0,
+      skippedCount: input.records.length,
+      reason: "LOCAL_DB branch sync is disabled",
+    };
+  }
+
+  const mappedRows = input.records
+    .map((record) => mapBranchLegacyRow(record))
+    .filter((record): record is BranchLegacyRow => record !== null);
+
+  if (mappedRows.length === 0) {
+    return {
+      applied: false,
+      processedCount: 0,
+      skippedCount: input.records.length,
+      reason: "No branch rows could be mapped to the legacy tblRefBranch shape",
+    };
+  }
+
+  await ensureSchema();
+  const pool = await getPool();
+
+  const procedureCheck = await pool.request().query(`
+    SELECT
+      CASE WHEN OBJECT_ID('dbo.tblRefBranch_Clear_UpdateInactive', 'P') IS NULL THEN 0 ELSE 1 END AS hasClearProcedure,
+      CASE WHEN OBJECT_ID('dbo.tblRefBranch_Insert', 'P') IS NULL THEN 0 ELSE 1 END AS hasInsertProcedure,
+      CASE WHEN OBJECT_ID('dbo.tblRefBranch_Insert_UpdateInactive', 'P') IS NULL THEN 0 ELSE 1 END AS hasUpdateInactiveProcedure;
+  `);
+
+  const hasClearProcedure = procedureCheck.recordset?.[0]?.hasClearProcedure === 1;
+  const hasInsertProcedure = procedureCheck.recordset?.[0]?.hasInsertProcedure === 1;
+  const hasUpdateInactiveProcedure = procedureCheck.recordset?.[0]?.hasUpdateInactiveProcedure === 1;
+
+  if (hasClearProcedure && hasInsertProcedure && hasUpdateInactiveProcedure) {
+    const transaction = new sql.Transaction(pool);
+    await transaction.begin();
+
+    try {
+      await new sql.Request(transaction).execute("dbo.tblRefBranch_Clear_UpdateInactive");
+
+      for (const record of mappedRows) {
+        await new sql.Request(transaction)
+          .input("BranchCode", sql.VarChar(50), record.branchCode)
+          .input("BranchDes", sql.VarChar(100), record.branchDes)
+          .input("Status", sql.Bit, record.status)
+          .input("EnterUser", sql.VarChar(50), record.enterUser)
+          .execute("dbo.tblRefBranch_Insert");
+      }
+
+      await new sql.Request(transaction).execute("dbo.tblRefBranch_Insert_UpdateInactive");
+      await transaction.commit();
+
+      return {
+        applied: true,
+        processedCount: mappedRows.length,
+        skippedCount: input.records.length - mappedRows.length,
+        executionMode: "stored-procedure",
+      };
+    } catch (error) {
+      await transaction.rollback();
+      throw error;
+    }
+  }
+
+  const tableCheck = await pool.request().query(`
+    SELECT CASE WHEN OBJECT_ID('dbo.tblRefBranch', 'U') IS NULL THEN 0 ELSE 1 END AS hasTable;
+  `);
+
+  if (tableCheck.recordset?.[0]?.hasTable !== 1) {
+    return {
+      applied: false,
+      processedCount: 0,
+      skippedCount: input.records.length,
+      reason: "dbo.tblRefBranch was not found in LOCAL_DB",
+    };
+  }
+
+  const columnsResult = await pool.request().query(`
+    SELECT [name]
+    FROM sys.columns
+    WHERE object_id = OBJECT_ID('dbo.tblRefBranch', 'U');
+  `);
+
+  const availableColumns = new Set(
+    (columnsResult.recordset ?? []).map((record) => String(record.name))
+  );
+  const hasImportStatus = availableColumns.has("ImportStatus");
+
+  const transaction = new sql.Transaction(pool);
+  await transaction.begin();
+
+  try {
+    if (hasImportStatus) {
+      await new sql.Request(transaction).query("UPDATE dbo.tblRefBranch SET ImportStatus = 0;");
+    }
+
+    for (const record of mappedRows) {
+      await new sql.Request(transaction)
+        .input("BranchCode", sql.VarChar(50), record.branchCode)
+        .input("BranchDes", sql.VarChar(100), record.branchDes)
+        .input("Status", sql.Bit, record.status)
+        .input("EnterUser", sql.VarChar(50), record.enterUser)
+        .query(`
+          IF EXISTS (SELECT 1 FROM dbo.tblRefBranch WHERE BranchCode = @BranchCode)
+          BEGIN
+            UPDATE dbo.tblRefBranch
+            SET
+              BranchDes = @BranchDes,
+              [Status] = @Status,
+              EnterUser = @EnterUser,
+              EnterDate = GETDATE()${hasImportStatus ? ", ImportStatus = 1" : ""}
+            WHERE BranchCode = @BranchCode;
+          END
+          ELSE
+          BEGIN
+            INSERT INTO dbo.tblRefBranch (BranchCode, BranchDes, [Status], EnterUser, EnterDate${hasImportStatus ? ", ImportStatus" : ""})
+            VALUES (@BranchCode, @BranchDes, @Status, @EnterUser, GETDATE()${hasImportStatus ? ", 1" : ""});
+          END;
+        `);
+    }
+
+    await transaction.commit();
+
+    return {
+      applied: true,
+      processedCount: mappedRows.length,
+      skippedCount: input.records.length - mappedRows.length,
+      executionMode: "direct-sql",
+      reason:
+        "tblRefBranch_Clear_UpdateInactive/tblRefBranch_Insert/tblRefBranch_Insert_UpdateInactive were not all found; fell back to direct SQL",
+    };
+  } catch (error) {
+    await transaction.rollback();
+    throw error;
+  }
+}
+
+export async function syncSerialNumbersToLegacyTable(input: {
+  records: unknown[];
+}): Promise<SerialNumberLegacySyncResult> {
+  if (!isLocalDbMasterDataWriteEnabled()) {
+    return {
+      applied: false,
+      processedCount: 0,
+      skippedCount: input.records.length,
+      reason: "LOCAL_DB serial-number sync is disabled",
+    };
+  }
+
+  const mappedRows = input.records
+    .map((record) => mapSerialNumberLegacyRow(record))
+    .filter((record): record is SerialNumberLegacyRow => record !== null);
+
+  if (mappedRows.length === 0) {
+    return {
+      applied: false,
+      processedCount: 0,
+      skippedCount: input.records.length,
+      reason: "No serial-number rows could be mapped to the legacy tblRefItem_SN shape",
+    };
+  }
+
+  await ensureSchema();
+  const pool = await getPool();
+
+  const procedureCheck = await pool.request().query(`
+    SELECT
+      CASE WHEN OBJECT_ID('dbo.tblRefItem_SN_Delete', 'P') IS NULL THEN 0 ELSE 1 END AS hasDeleteProcedure,
+      CASE WHEN OBJECT_ID('dbo.tblRefItem_SN_Insert', 'P') IS NULL THEN 0 ELSE 1 END AS hasInsertProcedure;
+  `);
+
+  const hasDeleteProcedure = procedureCheck.recordset?.[0]?.hasDeleteProcedure === 1;
+  const hasInsertProcedure = procedureCheck.recordset?.[0]?.hasInsertProcedure === 1;
+
+  if (hasDeleteProcedure && hasInsertProcedure) {
+    const transaction = new sql.Transaction(pool);
+    await transaction.begin();
+
+    try {
+      await new sql.Request(transaction).execute("dbo.tblRefItem_SN_Delete");
+
+      for (const record of mappedRows) {
+        await new sql.Request(transaction)
+          .input("ItemCode", sql.VarChar(100), record.itemCode)
+          .input("WHCode", sql.VarChar(100), record.whCode)
+          .input("Quantity", sql.Float, record.quantity)
+          .input("SN", sql.VarChar(500), record.sn)
+          .execute("dbo.tblRefItem_SN_Insert");
+      }
+
+      await transaction.commit();
+
+      return {
+        applied: true,
+        processedCount: mappedRows.length,
+        skippedCount: input.records.length - mappedRows.length,
+        executionMode: "stored-procedure",
+      };
+    } catch (error) {
+      await transaction.rollback();
+      throw error;
+    }
+  }
+
+  const tableCheck = await pool.request().query(`
+    SELECT CASE WHEN OBJECT_ID('dbo.tblRefItem_SN', 'U') IS NULL THEN 0 ELSE 1 END AS hasTable;
+  `);
+
+  if (tableCheck.recordset?.[0]?.hasTable !== 1) {
+    return {
+      applied: false,
+      processedCount: 0,
+      skippedCount: input.records.length,
+      reason: "dbo.tblRefItem_SN was not found in LOCAL_DB",
+    };
+  }
+
+  const transaction = new sql.Transaction(pool);
+  await transaction.begin();
+
+  try {
+    await new sql.Request(transaction).query("DELETE FROM dbo.tblRefItem_SN;");
+
+    for (const record of mappedRows) {
+      await new sql.Request(transaction)
+        .input("ItemCode", sql.VarChar(100), record.itemCode)
+        .input("WHCode", sql.VarChar(100), record.whCode)
+        .input("Quantity", sql.Float, record.quantity)
+        .input("SN", sql.VarChar(500), record.sn)
+        .query(`
+          DECLARE @StockLink INT, @WHLink INT;
+          SELECT @StockLink = stocklink FROM dbo.tblRefItem WHERE ItemCode = @ItemCode;
+          SELECT @WHLink = WhseLink FROM dbo.tblWhseMst WHERE WhseCode = @WHCode;
+
+          IF @StockLink IS NOT NULL AND @WHLink IS NOT NULL
+          BEGIN
+            IF EXISTS (
+              SELECT 1
+              FROM dbo.tblRefItem_SN
+              WHERE StockLink = @StockLink AND WHLink = @WHLink AND SN = @SN
+            )
+            BEGIN
+              UPDATE dbo.tblRefItem_SN
+              SET Quantity = @Quantity
+              WHERE StockLink = @StockLink AND WHLink = @WHLink AND SN = @SN;
+            END
+            ELSE
+            BEGIN
+              INSERT INTO dbo.tblRefItem_SN (StockLink, WHLink, SN, Quantity)
+              VALUES (@StockLink, @WHLink, @SN, @Quantity);
+            END
+          END;
+        `);
+    }
+
+    await transaction.commit();
+
+    return {
+      applied: true,
+      processedCount: mappedRows.length,
+      skippedCount: input.records.length - mappedRows.length,
+      executionMode: "direct-sql",
+      reason: "tblRefItem_SN_Delete/tblRefItem_SN_Insert were not both found; fell back to direct SQL",
     };
   } catch (error) {
     await transaction.rollback();
